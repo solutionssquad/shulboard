@@ -1,9 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/clappr/clappr@latest/dist/clappr.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>7</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      overflow: hidden;
+      height: 100vh;
+    }
+    .video-container {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+    }
+  </style>
 </head>
-<body bgcolor="#000000">
-  <div id="player" style="display: block; width: 100%; height: 100%;"></div>
+<body>
+
+<div class="video-container">
+  <!-- Brightcove official in-page embed (live stream) -->
+  <video
+    id="myPlayerID"
+    data-account="4368278029001"
+    data-player="HyZhqV2ePb"
+    data-video-id="6024028001001"
+    data-embed="default"
+    data-application-id
+    class="video-js"
+    controls
+    autoplay
+    muted
+    playsinline
+  ></video>
+
+  <script src="https://players.brightcove.net/4368278029001/HyZhqV2ePb_default/index.min.js"></script>
+
   <script>
-    var player = new Clappr.Player({source: "https://bcsecurelivehls-i.akamaihd.net/hls/live/598043/4368278029001_1/onair/master.m3u8", width: "100%", height: "100%",  mute: true, loop: true, chromeless: true, autoPlay: true, parentId: "#player"});
+    // Wait for player to be ready, then force captions on (if available)
+    videojs('myPlayerID').ready(function() {
+      var player = this;
+      player.on('loadedmetadata', function() {
+        var tracks = player.remoteTextTracks();
+        if (tracks && tracks.length > 0) {
+          for (var i = 0; i < tracks.length; i++) {
+            if (tracks[i].kind === 'captions' || tracks[i].kind === 'subtitles') {
+              tracks[i].mode = 'showing';  // Turn captions ON by default
+              break;
+            }
+          }
+        }
+      });
+    });
   </script>
-  </body>
+</div>
+
+</body>
+</html>
