@@ -1,54 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>LiveNOW from FOX – Live Stream</title>
-  <!-- Video.js CSS & JS CDN -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>lvenow</title>
   <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
   <style>
-    body { margin:0; background:#000; color:#fff; font-family:Arial, sans-serif; }
-    .container { max-width:1200px; margin:30px auto; padding:0 15px; text-align:center; }
-    h1 { margin-bottom:20px; }
-    #player { width:100%; max-width:960px; margin:0 auto; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      overflow: hidden;
+      height: 100vh;
+    }
+    #player {
+      width: 100%;
+      height: 100vh;
+    }
   </style>
 </head>
 <body>
 
-  <div class="container">
-    <h1>LiveNOW from FOX Live Stream</h1>
-    
-    <video id="player" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto" autoplay muted>
-      <source src="https://fox-foxnewsnow-vizio.amagi.tv/playlist.m3u8" type="application/x-mpegURL" />
-      <!-- Fallback second link if first fails (uncomment if needed) -->
-      <!-- <source src="https://fox-foxnewsnow-samsungus.amagi.tv/playlist.m3u8" type="application/x-mpegURL" /> -->
-      Your browser does not support HTML5 video.
-    </video>
+<video
+  id="player"
+  class="video-js vjs-default-skin vjs-fill"
+  controls
+  preload="auto"
+  autoplay
+  muted
+  playsinline
+>
+  <source src="https://fox-foxnewsnow-vizio.amagi.tv/playlist.m3u8" type="application/x-mpegURL">
+  <track kind="captions" srcLang="en" label="English" default>
+  Your browser does not support video.
+</video>
 
-    <p style="margin-top:20px; font-size:0.9em; color:#aaa;">
-      Testing in VLC first is recommended.<br>
-      These are public Amagi CDN links (unofficial but widely used).<br>
-      If it doesn't play → try a different link above or check your internet/VPN.
-    </p>
-  </div>
+<script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+<script>
+  var player = videojs('player', {
+    fluid: false,
+    fill: true,
+    autoplay: true,
+    muted: true,
+    controls: true,
+    liveui: true,
+    preferFullWindow: true,
+    bigPlayButton: false,          // hides big play button on start
+    controlBar: {
+      volumePanel: { inline: false },
+      currentTimeDisplay: false,
+      timeDivider: false,
+      durationDisplay: false,
+      remainingTimeDisplay: false
+    }
+  });
 
-  <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
-  <script>
-    // Initialize Video.js player
-    var player = videojs('player', {
-      fluid: true,           // Makes it responsive
-      autoplay: true,        // Try to auto-start (browser may block sound)
-      muted: true,           // Helps with autoplay policies
-      controls: true,
-      liveui: true           // Shows "LIVE" indicator and better seekbar for live
-    });
-
-    // Optional: log errors
-    player.on('error', function() {
-      console.log('Player error:', player.error());
-      alert('Stream may be down or blocked. Try another link or test in VLC.');
-    });
-  </script>
+  // Try to enable captions automatically when they become available
+  player.ready(function() {
+    var tracks = player.remoteTextTracks();
+    if (tracks && tracks.length > 0) {
+      for (var i = 0; i < tracks.length; i++) {
+        if (tracks[i].kind === 'captions' || tracks[i].kind === 'subtitles') {
+          tracks[i].mode = 'showing';
+          break;
+        }
+      }
+    }
+  });
+</script>
 
 </body>
 </html>
