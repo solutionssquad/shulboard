@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>7</title>
+  <title>7News Live</title>
   <style>
     body {
       margin: 0;
@@ -12,8 +12,7 @@
       overflow: hidden;
       height: 100vh;
     }
-    .video-container {
-      position: relative;
+    #player {
       width: 100%;
       height: 100vh;
     }
@@ -21,42 +20,56 @@
 </head>
 <body>
 
-<div class="video-container">
-  <!-- Brightcove official in-page embed (live stream) -->
-  <video
-    id="myPlayerID"
-    data-account="4368278029001"
-    data-player="HyZhqV2ePb"
-    data-video-id="6024028001001"
-    data-embed="default"
-    data-application-id
-    class="video-js"
-    controls
-    autoplay
-    muted
-    playsinline
-  ></video>
+<video
+  id="player"
+  data-account="4368278029001"
+  data-player="HyZhqV2ePb"
+  data-video-id="6024028001001"
+  data-embed="default"
+  class="video-js vjs-default-skin vjs-fill"
+  controls
+  preload="auto"
+  autoplay
+  muted
+  playsinline
+></video>
 
-  <script src="https://players.brightcove.net/4368278029001/HyZhqV2ePb_default/index.min.js"></script>
+<script src="https://players.brightcove.net/4368278029001/HyZhqV2ePb_default/index.min.js"></script>
 
-  <script>
-    // Wait for player to be ready, then force captions on (if available)
-    videojs('myPlayerID').ready(function() {
-      var player = this;
-      player.on('loadedmetadata', function() {
-        var tracks = player.remoteTextTracks();
-        if (tracks && tracks.length > 0) {
-          for (var i = 0; i < tracks.length; i++) {
-            if (tracks[i].kind === 'captions' || tracks[i].kind === 'subtitles') {
-              tracks[i].mode = 'showing';  // Turn captions ON by default
-              break;
-            }
+<script>
+  videojs('player', {
+    fluid: false,
+    fill: true,
+    autoplay: true,
+    muted: true,
+    controls: true,
+    liveui: true,
+    preferFullWindow: true,
+    bigPlayButton: false,  // hide big center play button
+    controlBar: {
+      volumePanel: { inline: false },
+      currentTimeDisplay: false,
+      timeDivider: false,
+      durationDisplay: false,
+      remainingTimeDisplay: false
+    }
+  }).ready(function() {
+    var player = this;
+
+    // Force captions ON when tracks are loaded
+    player.on('loadedmetadata', function() {
+      var tracks = player.remoteTextTracks();
+      if (tracks && tracks.length > 0) {
+        for (var i = 0; i < tracks.length; i++) {
+          if (tracks[i].kind === 'captions' || tracks[i].kind === 'subtitles') {
+            tracks[i].mode = 'showing';
+            break;
           }
         }
-      });
+      }
     });
-  </script>
-</div>
+  });
+</script>
 
 </body>
 </html>
