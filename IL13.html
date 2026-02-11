@@ -1,10 +1,68 @@
+<!doctype html>
+<html>
 <head>
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/clappr/clappr@latest/dist/clappr.min.js"></script>
-</head>
-<body bgcolor="black">
-      <div id="player" style="display: block; width: 100%; height: 100%; border: none; "></div>
-  <script>
-    var player = new Clappr.Player({source: "https://d2xg1g9o5vns8m.cloudfront.net/out/v1/66d4ac8748ce4a9298b4e40e48d1ae2f/index.m3u8", width: "100%", height: "100%",  mute: true, loop: true, chromeless: true, autoPlay: true, parentId: "#player"});
-  </script>
-  </body>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>IL13 Rev1</title>
 
+<script src="https://cdn.jsdelivr.net/gh/clappr/clappr@latest/dist/clappr.min.js"></script>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+#player {
+  position: fixed;
+  inset: 0;
+  background: #000;
+}
+
+/* Force Clappr wrappers to fill */
+#player .clappr-player,
+#player .container,
+#player .player,
+#player .media,
+#player video {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* No zoom, no distortion */
+#player video {
+  object-fit: contain !important;
+  background: #000;
+}
+
+/* Remove overlays */
+#player .media-control,
+#player .spinner {
+  display: none !important;
+}
+</style>
+</head>
+
+<body>
+<div id="player"></div>
+
+<script>
+var player = new Clappr.Player({
+  source: "https://d2xg1g9o5vns8m.cloudfront.net/out/v1/66d4ac8748ce4a9298b4e40e48d1ae2f/index.m3u8",
+  parentId: "#player",
+  autoPlay: true,
+  mute: true,
+  chromeless: true,
+  loop: true,
+  width: "100%",
+  height: "100%",
+  playback: { playInline: true }
+});
+</script>
+
+</body>
+</html>
