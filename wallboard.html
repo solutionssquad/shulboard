@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Wallboard Rev2</title>
+<title>Wallboard Rev3</title>
 
 <style>
 html, body {
@@ -15,9 +15,9 @@ html, body {
 }
 
 :root {
-  --r2h: calc(100vw * 9 / 64);  /* 4 across */
-  --r3h: calc(100vw * 9 / 80);  /* 5 across */
-  --r4h: calc(100vw * 9 / 80);
+  --r2h: calc(100vw * 9 / 48); /* 3 across */
+  --r3h: calc(100vw * 9 / 64); /* 4 across */
+  --r4h: calc(100vw * 9 / 64); /* 4 across */
   --r1h: calc(100vh - var(--r2h) - var(--r3h) - var(--r4h));
 }
 
@@ -26,28 +26,23 @@ html, body {
   height: 100vh;
   display: grid;
   grid-template-rows: var(--r1h) var(--r2h) var(--r3h) var(--r4h);
-  grid-template-columns: repeat(20, 1fr);
+  grid-template-columns: repeat(12, 1fr); /* LCM for 3 and 4 is 12 */
   gap: 0;
   background: #000;
 }
 
 .tile {
-  position: relative;
   overflow: hidden;
   background: #000;
   min-width: 0;
   min-height: 0;
 }
 
-/* Force fill behavior */
 .tile iframe {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 110%;
-  height: 110%;
-  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
   border: 0;
+  display: block;
   background: #000;
 }
 </style>
@@ -56,30 +51,33 @@ html, body {
 <body>
 <div class="grid">
 
-  <!-- Row 1 -->
-  <div class="tile" style="grid-row:1; grid-column:1 / span 20;">
+  <!-- Row 1: wildcard -->
+  <div class="tile" style="grid-row:1; grid-column:1 / span 12;">
     <iframe src="https://solutionssquad.github.io/shulboard/ticker.html"></iframe>
   </div>
 
-  <!-- Row 2 -->
-  <div class="tile" style="grid-row:2; grid-column:1 / span 5;"><iframe src="https://solutionssquad.github.io/shulboard/livenow.html"></iframe></div>
-  <div class="tile" style="grid-row:2; grid-column:6 / span 5;"><iframe src="https://solutionssquad.github.io/shulboard/wsvn.html"></iframe></div>
-  <div class="tile" style="grid-row:2; grid-column:11 / span 5;"><iframe src="https://solutionssquad.github.io/shulboard/i24.html"></iframe></div>
-  <div class="tile" style="grid-row:2; grid-column:16 / span 5;"><iframe src="https://solutionssquad.github.io/shulboard/IL13.html"></iframe></div>
+  <!-- Row 2: 3 videos (each spans 4 of 12 columns) -->
+  <div class="tile" style="grid-row:2; grid-column:1 / span 4;">
+    <iframe src="https://solutionssquad.github.io/shulboard/livenow.html"></iframe>
+  </div>
+  <div class="tile" style="grid-row:2; grid-column:5 / span 4;">
+    <iframe src="https://solutionssquad.github.io/shulboard/wsvn.html"></iframe>
+  </div>
+  <div class="tile" style="grid-row:2; grid-column:9 / span 4;">
+    <iframe src="https://solutionssquad.github.io/shulboard/i24.html"></iframe>
+  </div>
 
-  <!-- Row 3 -->
-  <div class="tile" style="grid-row:3; grid-column:1 / span 4;"><iframe src="https://solutionssquad.github.io/shulboard/globalnews.html"></iframe></div>
-  <div class="tile" style="grid-row:3; grid-column:5 / span 4;"><iframe src="https://solutionssquad.github.io/shulboard/sky.html"></iframe></div>
-  <div class="tile" style="grid-row:3; grid-column:9 / span 4;"><iframe src="https://solutionssquad.github.io/shulboard/bloomberg.html"></iframe></div>
-  <div class="tile" style="grid-row:3; grid-column:13 / span 4;"><iframe src="https://solutionssquad.github.io/shulboard/abc1.html"></iframe></div>
-  <div class="tile" style="grid-row:3; grid-column:17 / span 4;"><iframe src="https://solutionssquad.github.io/shulboard/abc2.html"></iframe></div>
+  <!-- Row 3: 4 videos (each spans 3 of 12 columns) -->
+  <div class="tile" style="grid-row:3; grid-column:1 / span 3;"><iframe src="https://solutionssquad.github.io/shulboard/IL13.html"></iframe></div>
+  <div class="tile" style="grid-row:3; grid-column:4 / span 3;"><iframe src="https://solutionssquad.github.io/shulboard/globalnews.html"></iframe></div>
+  <div class="tile" style="grid-row:3; grid-column:7 / span 3;"><iframe src="https://solutionssquad.github.io/shulboard/sky.html"></iframe></div>
+  <div class="tile" style="grid-row:3; grid-column:10 / span 3;"><iframe src="https://solutionssquad.github.io/shulboard/bloomberg.html"></iframe></div>
 
-  <!-- Row 4 -->
-  <div class="tile" style="grid-row:4; grid-column:1 / span 4;"><iframe src="https://solutionssquad.github.io/shulboard/abc3.html"></iframe></div>
-  <div class="tile" style="grid-row:4; grid-column:5 / span 4;"><iframe src="https://solutionssquad.github.io/shulboard/rt.html"></iframe></div>
-  <div class="tile" style="grid-row:4; grid-column:9 / span 4;"><iframe src="https://solutionssquad.github.io/shulboard/newsnation.html"></iframe></div>
-  <div class="tile" style="grid-row:4; grid-column:13 / span 4;"><iframe src="https://solutionssquad.github.io/shulboard/abc1.html"></iframe></div>
-  <div class="tile" style="grid-row:4; grid-column:17 / span 4;"><iframe src="https://solutionssquad.github.io/shulboard/abc2.html"></iframe></div>
+  <!-- Row 4: 4 videos -->
+  <div class="tile" style="grid-row:4; grid-column:1 / span 3;"><iframe src="https://solutionssquad.github.io/shulboard/abc1.html"></iframe></div>
+  <div class="tile" style="grid-row:4; grid-column:4 / span 3;"><iframe src="https://solutionssquad.github.io/shulboard/abc2.html"></iframe></div>
+  <div class="tile" style="grid-row:4; grid-column:7 / span 3;"><iframe src="https://solutionssquad.github.io/shulboard/abc3.html"></iframe></div>
+  <div class="tile" style="grid-row:4; grid-column:10 / span 3;"><iframe src="https://solutionssquad.github.io/shulboard/newsnation.html"></iframe></div>
 
 </div>
 </body>
