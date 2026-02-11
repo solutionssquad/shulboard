@@ -2,8 +2,8 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <title>Wallboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Wallboard Test</title>
   <style>
     html, body {
       margin: 0;
@@ -17,76 +17,77 @@
       width: 100vw;
       height: 100vh;
       display: grid;
-
-      /* 3 rows: make top row bigger */
       grid-template-rows: 40fr 30fr 30fr;
-
-      /* 5 columns total; top row spans 5 columns using 4 tiles with spans */
       grid-template-columns: repeat(20, 1fr);
-
       gap: 0;
     }
 
-    /* Common tile styling */
     .tile {
-      position: relative;
-      background: #000;
       overflow: hidden;
+      background: #000;
     }
 
-    /* Make embedded content fill the tile */
-    .tile iframe,
-    .tile video {
+    .tile iframe {
       width: 100%;
       height: 100%;
       border: 0;
       display: block;
-      background: #000;
-      object-fit: cover; /* change to contain if you want no cropping */
-    }
-
-    /* Optional: tiny label overlay */
-    .label {
-      position: absolute;
-      left: 6px;
-      top: 4px;
-      font: 12px/1.2 Arial, sans-serif;
-      color: #fff;
-      background: rgba(0,0,0,.45);
-      padding: 2px 6px;
-      border-radius: 3px;
-      z-index: 2;
-      pointer-events: none;
     }
   </style>
 </head>
 <body>
-  <div class="grid">
-    <!-- Row 1: 4 tiles across full width (each spans 5 of 20 columns) -->
-    <div class="tile" style="grid-row:1; grid-column:1 / span 5;"><div class="label">1</div><iframe src="URL_1"></iframe></div>
-    <div class="tile" style="grid-row:1; grid-column:6 / span 5;"><div class="label">2</div><iframe src="URL_2"></iframe></div>
-    <div class="tile" style="grid-row:1; grid-column:11 / span 5;"><div class="label">3</div><iframe src="URL_3"></iframe></div>
-    <div class="tile" style="grid-row:1; grid-column:16 / span 5;"><div class="label">4</div><iframe src="URL_4"></iframe></div>
 
-    <!-- Row 2: 5 tiles (each spans 4 of 20 columns) -->
-    <div class="tile" style="grid-row:2; grid-column:1 / span 4;"><div class="label">5</div><iframe src="URL_5"></iframe></div>
-    <div class="tile" style="grid-row:2; grid-column:5 / span 4;"><div class="label">6</div><iframe src="URL_6"></iframe></div>
-    <div class="tile" style="grid-row:2; grid-column:9 / span 4;"><div class="label">7</div><iframe src="URL_7"></iframe></div>
-    <div class="tile" style="grid-row:2; grid-column:13 / span 4;"><div class="label">8</div><iframe src="URL_8"></iframe></div>
-    <div class="tile" style="grid-row:2; grid-column:17 / span 4;"><div class="label">9</div><iframe src="URL_9"></iframe></div>
+<div class="grid">
 
-    <!-- Row 3: 5 tiles -->
-    <div class="tile" style="grid-row:3; grid-column:1 / span 4;"><div class="label">10</div><iframe src="URL_10"></iframe></div>
-    <div class="tile" style="grid-row:3; grid-column:5 / span 4;"><div class="label">11</div><iframe src="URL_11"></iframe></div>
-    <div class="tile" style="grid-row:3; grid-column:9 / span 4;"><div class="label">12</div><iframe src="URL_12"></iframe></div>
-    <div class="tile" style="grid-row:3; grid-column:13 / span 4;"><div class="label">13</div><iframe src="URL_13"></iframe></div>
-    <div class="tile" style="grid-row:3; grid-column:17 / span 4;"><div class="label">14</div><iframe src="URL_14"></iframe></div>
+  <!-- Row 1: 4 tiles -->
+  <div class="tile" style="grid-row:1; grid-column:1 / span 5;">
+    <iframe src="https://solutionssquad.github.io/shulboard/livenow.html"></iframe>
+  </div>
+  <div class="tile" style="grid-row:1; grid-column:6 / span 5;">
+    <iframe src="https://solutionssquad.github.io/shulboard/livenow.html"></iframe>
+  </div>
+  <div class="tile" style="grid-row:1; grid-column:11 / span 5;">
+    <iframe src="https://solutionssquad.github.io/shulboard/livenow.html"></iframe>
+  </div>
+  <div class="tile" style="grid-row:1; grid-column:16 / span 5;">
+    <iframe src="https://solutionssquad.github.io/shulboard/livenow.html"></iframe>
   </div>
 
-  <script>
-    // Optional: periodic refresh to recover stuck streams (in minutes)
-    const REFRESH_MINUTES = 60;
-    setTimeout(() => location.reload(), REFRESH_MINUTES * 60 * 1000);
-  </script>
+  <!-- Row 2: 5 tiles -->
+  <div class="tile" style="grid-row:2; grid-column:1 / span 4;">
+    <iframe src="https://solutionssquad.github.io/shulboard/livenow.html"></iframe>
+  </div>
+  <div class="tile" style="grid-row:2; grid-column:5 / span 4;">
+    <iframe src="https://solutionssquad.github.io/shulboard/livenow.html"></iframe>
+  </div>
+  <div class="tile" style="grid-row:2; grid-column:9 / span 4;">
+    <iframe src="https://solutionssquad.github.io/shulboard/livenow.html"></iframe>
+  </div>
+  <div class="tile" style="grid-row:2; grid-column:13 / span 4;">
+    <iframe src="https://solutionssquad.github.io/shulboard/livenow.html"></iframe>
+  </div>
+  <div class="tile" style="grid-row:2; grid-column:17 / span 4;">
+    <iframe src="https://solutionssquad.github.io/shulboard/livenow.html"></iframe>
+  </div>
+
+  <!-- Row 3: 5 tiles -->
+  <div class="tile" style="grid-row:3; grid-column:1 / span 4;">
+    <iframe src="https://solutionssquad.github.io/shulboard/livenow.html"></iframe>
+  </div>
+  <div class="tile" style="grid-row:3; grid-column:5 / span 4;">
+    <iframe src="https://solutionssquad.github.io/shulboard/livenow.html"></iframe>
+  </div>
+  <div class="tile" style="grid-row:3; grid-column:9 / span 4;">
+    <iframe src="https://solutionssquad.github.io/shulboard/livenow.html"></iframe>
+  </div>
+  <div class="tile" style="grid-row:3; grid-column:13 / span 4;">
+    <iframe src="https://solutionssquad.github.io/shulboard/livenow.html"></iframe>
+  </div>
+  <div class="tile" style="grid-row:3; grid-column:17 / span 4;">
+    <iframe src="https://solutionssquad.github.io/shulboard/livenow.html"></iframe>
+  </div>
+
+</div>
+
 </body>
 </html>
