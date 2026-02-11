@@ -1,9 +1,67 @@
+<!doctype html>
+<html>
 <head>
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/clappr/clappr@latest/dist/clappr.min.js"></script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sky Stream Rev1</title>
+
+<script src="https://cdn.jsdelivr.net/gh/clappr/clappr@latest/dist/clappr.min.js"></script>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+#player {
+  position: fixed;
+  inset: 0;
+  background: #000;
+}
+
+/* Force player to fully fill container */
+#player .clappr-player,
+#player .container,
+#player .player,
+#player video {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Keep full frame visible without zoom */
+#player video {
+  object-fit: contain !important;
+  background: #000;
+}
+
+/* Remove UI */
+#player .media-control,
+#player .spinner {
+  display: none !important;
+}
+</style>
 </head>
-<body bgcolor="#000000">
-  <div id="player" style="display: block; width: 100%; height: 100%;"></div>
-  <script>
-    var player = new Clappr.Player({source: "https://linear417-gb-hls1-prd-ak.cdn.skycdp.com/100e/Content/HLS_001_1080_30/Live/channel(skynews)/index_1080-30.m3u8", width: "100%", height: "100%",  mute: true, loop: true, chromeless: true, autoPlay: true, parentId: "#player"});
-  </script>
-  </body>
+
+<body>
+<div id="player"></div>
+
+<script>
+var player = new Clappr.Player({
+  source: "https://linear417-gb-hls1-prd-ak.cdn.skycdp.com/100e/Content/HLS_001_1080_30/Live/channel(skynews)/index_1080-30.m3u8",
+  parentId: "#player",
+  autoPlay: true,
+  mute: true,
+  chromeless: true,
+  loop: true,
+  width: "100%",
+  height: "100%",
+  playback: { playInline: true }
+});
+</script>
+
+</body>
+</html>
