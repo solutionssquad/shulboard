@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Universal Player Rev2</title>
+<title>Universal Player Rev1</title>
 
 <script src="https://cdn.jsdelivr.net/gh/clappr/clappr@latest/dist/clappr.min.js"></script>
 
@@ -17,59 +17,74 @@ html, body {
   overflow: hidden;
 }
 
-#root {
+#player {
   position: fixed;
   inset: 0;
   background: #000;
 }
 
-/* Common full-bleed */
-.full {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  background: #000;
-}
-
-/* Clappr fill */
-#root .clappr-player,
-#root .container,
-#root .player,
-#root .media,
-#root video {
+/* Force Clappr wrappers to fill */
+#player .clappr-player,
+#player .container,
+#player .player,
+#player .media,
+#player video {
   width: 100% !important;
   height: 100% !important;
 }
 
-/* Default fit behavior, can be overridden by ?fit=cover */
-#root video {
-  object-fit: contain;
+/* No zoom, no distortion */
+#player video {
+  object-fit: contain !important; /* change to cover if you prefer crop-fill */
   background: #000;
 }
 
-/* Hide any overlays */
-#root .media-control,
-#root .spinner,
-#root .vjs-control-bar,
-#root .vjs-big-play-button,
-#root .vjs-loading-spinner,
-#root .vjs-modal-dialog {
+/* Remove overlays */
+#player .media-control,
+#player .spinner {
   display: none !important;
 }
 </style>
 </head>
 
 <body>
-<div id="root"></div>
+<div id="player"></div>
 
 <script>
-function qp(name) {
-  return new URL(window.location.href).searchParams.get(name);
-}
-function qpi(name, defVal) {
-  const v = parseInt(qp(name) || "", 10);
-  return Number.isFinite(v) ? v : defVal;
+function getParam(name) {
+  const u = new URL(window.location.href);
+  return u.searchParams.get(name);
 }
 
-const fit = (qp("fit") || "contain").toLow
+const src = getParam("src");
+if (!src) {
+  document.body.innerHTML = "<div style='color:#fff;font:16px Arial;padding:12px'>Missing ?src= (URL-encoded m3u8)</div>";
+} else {
+  const fit = (getParam("fit") || "contain").toLowerCase();
+  if (fit === "cover") {
+    const style = document.createElement("style");
+    style.textContent = "#player video{object-fit:cover!important}";
+    document.head.appendChild(style);
+  }
+
+  new Clappr.Player({
+    source: src,
+    parentId: "#player",
+    autoPlay: true,
+    mute: true,
+    chromeless: true,
+    loop: true,
+    width: "100%",
+    height: "100%",
+    playback: { playInline: true }
+  });
+
+  const reloadMinutes = parseInt(getParam("reload") || "0", 10);
+  if (Number.isFinite(reloadMinutes) && reloadMinutes > 0) {
+    setTimeout(() => location.reload(), reloadMinutes * 60 * 1000);
+  }
+}
+</script>
+
+</body>
+</html>
