@@ -1,10 +1,9 @@
-```html
 <!doctype html>
 <html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Encoder Rev2</title>
+<title>Encoder Rev3</title>
 
 <style>
 html, body {
@@ -87,15 +86,59 @@ hr {
   border-top: 1px solid #222;
   margin: 18px 0;
 }
+
+.listgrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.item {
+  border: 1px solid #222;
+  background: #0f0f0f;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.itemhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.itemname {
+  font-weight: 600;
+}
+
+.itemurl {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #d7d7d7;
+}
+
+.itembtns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+button.tiny {
+  padding: 7px 10px;
+  font-size: 12px;
+}
 </style>
 </head>
 
 <body>
 <div class="wrap">
-  <h1>Wallboard URL Encoder Rev2</h1>
+  <h1>Wallboard URL Encoder Rev3</h1>
   <small>
     Paste an HLS .m3u8 URL (or any URL) and this page generates a ready-to-copy player.html link.
-    This version avoids double-encoding. It also includes a decoder section to verify the src value.
+    Includes a decoder and a saved list of stream sources you can click to populate the encoder.
   </small>
 
   <label for="base">Player base URL</label>
@@ -140,10 +183,20 @@ hr {
 
   <hr />
 
+  <h2>Saved stream list (click to load into encoder)</h2>
+  <small>
+    Edit the list in the <span class="code">STREAMS</span> object inside this file as you find more sources.
+    Click <span class="code">Load</span> to put the URL into the encoder, then copy the generated output.
+  </small>
+
+  <div id="streamList" class="listgrid"></div>
+
+  <hr />
+
   <h2>Decoder / Reverse Check</h2>
   <small>
-    Paste a full player.html URL below. This will extract the src parameter and decode it (once and twice),
-    so you can immediately spot double-encoding issues (%253A means encoded twice).
+    Paste a full player.html URL below. This extracts the src parameter and decodes it (once and twice),
+    so you can spot double-encoding issues.
   </small>
 
   <label for="fullUrl">Full player URL to decode</label>
@@ -173,10 +226,19 @@ hr {
 
 <script>
 function $(id) { return document.getElementById(id); }
+function clean(s) { return (s || "").trim(); }
 
-function clean(s) {
-  return (s || "").trim();
-}
+const STREAMS = [
+  { name: "Live now fox", url: "https://fox-foxnewsnow-vizio.amagi.tv/playlist.m3u8" },
+  { name: "IL13", url: "https://d2xg1g9o5vns8m.cloudfront.net/out/v1/66d4ac8748ce4a9298b4e40e48d1ae2f/index.m3u8" },
+  { name: "i24 (Brightcove tokenized)", url: "https://fastly.live.brightcove.com/6386790908112/eu-central-1/5377161796001/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJob3N0IjoiZXJmajYzLmVncmVzcy53YzQ3bTEiLCJhY2NvdW50X2lkIjoiNTM3NzE2MTc5NjAwMSIsImVobiI6ImZhc3RseS5saXZlLmJyaWdodGNvdmUuY29tIiwiaXNzIjoiYmxpdmUtcGxheWJhY2stc291cmNlLWFwaSIsInN1YiI6InBhdGhtYXB0b2tlbiIsImF1ZCI6WyI1Mzc3MTYxNzk2MDAxIl0sImp0aSI6IjYzODY3OTA5MDgxMTIifQ._w5c3EwfnEecDCEpDaKuVz07uuEyUb3vXvQN3svv-oU/chunklist.m3u8" },
+  { name: "ABC1", url: "https://abcnews-streams.akamaized.net/hls/live/2023561/abcnewshudson2/master.m3u8" },
+  { name: "ABC2", url: "https://abcnews-streams.akamaized.net/hls/live/2023566/abcnewshudson7/master.m3u8" },
+  { name: "ABC3", url: "https://abcnews-streams.akamaized.net/hls/live/2023569/abcnewshudson10/master.m3u8" },
+  { name: "Bloomberg", url: "https://liveprodusphoenixeast.akamaized.net/USPhx-HD/Channel-TX-USPhx-AWS-virginia-1/Source-USPhx-16k-1-s6lk2-BP-07-02-81ykIWnsMsg_live.m3u8" },
+  { name: "GlobalNews", url: "https://live.corusdigitaldev.com/groupd/live/49a91e7f-1023-430f-8d66-561055f3d0f7/live.isml/live-audio_1=96000-video=2499968.m3u8" },
+  { name: "Sky news (RT stream in your list)", url: "https://rt-glb.rttv.com/dvr/rtnews/playlist.m3u8" }
+];
 
 function build() {
   const base = clean($("base").value);
@@ -188,9 +250,8 @@ function build() {
   if (!base) return "Missing player base URL.";
   if (!src) return "Missing stream URL.";
 
-  // IMPORTANT: Do NOT pre-encode. URLSearchParams will encode once.
   const params = new URLSearchParams();
-  params.set("src", src);
+  params.set("src", src);          // DO NOT pre-encode
   params.set("fit", fit);
   params.set("muted", muted);
 
@@ -205,10 +266,8 @@ function safeDecodeOnce(s) {
 }
 
 function bestDecode(s) {
-  // Decode twice to handle accidental double-encoding
   const once = safeDecodeOnce(s);
   const twice = safeDecodeOnce(once);
-  // If decoding changed the string, prefer the most-decoded form
   if (twice !== once) return twice;
   return once;
 }
@@ -218,7 +277,6 @@ async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text);
   } catch (e) {
-    // fallback
     const ta = document.createElement("textarea");
     ta.value = text;
     document.body.appendChild(ta);
@@ -250,12 +308,71 @@ function decodeFullUrl() {
   $("srcDecoded").value = bestDecode(raw);
 }
 
-$("gen").addEventListener("click", () => {
-  $("out").value = build();
-});
+function renderStreamList() {
+  const host = $("streamList");
+  host.innerHTML = "";
 
+  STREAMS.forEach((s) => {
+    const div = document.createElement("div");
+    div.className = "item";
+
+    const head = document.createElement("div");
+    head.className = "itemhead";
+
+    const left = document.createElement("div");
+    const name = document.createElement("div");
+    name.className = "itemname";
+    name.textContent = s.name;
+
+    const url = document.createElement("div");
+    url.className = "itemurl code";
+    url.textContent = s.url;
+
+    left.appendChild(name);
+    left.appendChild(url);
+
+    head.appendChild(left);
+    div.appendChild(head);
+
+    const btns = document.createElement("div");
+    btns.className = "itembtns";
+
+    const load = document.createElement("button");
+    load.className = "tiny";
+    load.textContent = "Load";
+    load.addEventListener("click", () => {
+      $("src").value = s.url;
+      $("out").value = build();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      $("src").focus();
+    });
+
+    const copyRaw = document.createElement("button");
+    copyRaw.className = "tiny secondary";
+    copyRaw.textContent = "Copy raw";
+    copyRaw.addEventListener("click", () => copyText(s.url));
+
+    const copyReady = document.createElement("button");
+    copyReady.className = "tiny secondary";
+    copyReady.textContent = "Copy ready";
+    copyReady.addEventListener("click", () => {
+      $("src").value = s.url;
+      const out = build();
+      $("out").value = out;
+      copyText(out);
+    });
+
+    btns.appendChild(load);
+    btns.appendChild(copyRaw);
+    btns.appendChild(copyReady);
+
+    div.appendChild(btns);
+    host.appendChild(div);
+  });
+}
+
+$("gen").addEventListener("click", () => { $("out").value = build(); });
 $("copy").addEventListener("click", () => copyText($("out").value));
-
 $("clear").addEventListener("click", () => {
   $("src").value = "";
   $("out").value = "";
@@ -263,10 +380,8 @@ $("clear").addEventListener("click", () => {
 });
 
 $("decode").addEventListener("click", decodeFullUrl);
-
 $("copyDecoded").addEventListener("click", () => copyText($("srcDecoded").value));
 
-// Auto-generate on input
 $("src").addEventListener("input", () => {
   const s = clean($("src").value);
   if (s.length > 8) $("out").value = build();
@@ -276,10 +391,10 @@ $("muted").addEventListener("change", () => $("out").value = build());
 $("reload").addEventListener("input", () => $("out").value = build());
 $("base").addEventListener("input", () => $("out").value = build());
 
-// Auto-decode on input
 $("fullUrl").addEventListener("input", decodeFullUrl);
+
+renderStreamList();
 </script>
 
 </body>
 </html>
-```
