@@ -3,9 +3,18 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Headlines Rev1</title>
+<title>Headlines Rev2</title>
 
 <style>
+:root{
+  --fontSize: 16px;        /* main headline font size */
+  --sourceSize: 13px;      /* source label font size */
+  --gap: 26px;             /* spacing between items */
+  --dotSize: 7px;          /* dot size */
+  --speed: 90;             /* pixels per second */
+  --padX: 12px;            /* left/right padding */
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -25,32 +34,23 @@ html, body {
   color: #fff;
 }
 
-.label {
-  flex: 0 0 auto;
-  padding: 0 14px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  font-size: 14px;
-  color: #fff;
-  border-right: 1px solid #222;
-}
-
 .track {
   position: relative;
   flex: 1 1 auto;
   height: 100%;
   overflow: hidden;
+  padding: 0 var(--padX);
+  box-sizing: border-box;
 }
 
 .marquee {
   position: absolute;
   white-space: nowrap;
   will-change: transform;
-  font-size: 14px;
   line-height: 1;
   display: inline-flex;
   align-items: center;
-  gap: 26px;
+  gap: var(--gap);
   padding-left: 100%;
 }
 
@@ -62,8 +62,8 @@ html, body {
 }
 
 .dot {
-  width: 7px;
-  height: 7px;
+  width: var(--dotSize);
+  height: var(--dotSize);
   border-radius: 50%;
   background: #1f6feb;
   flex: 0 0 auto;
@@ -72,12 +72,13 @@ html, body {
 .source {
   color: #9aa4b2;
   font-weight: 700;
-  font-size: 12px;
+  font-size: var(--sourceSize);
 }
 
 .title {
   color: #f2f2f2;
   font-weight: 600;
+  font-size: var(--fontSize);
 }
 
 .status {
@@ -85,9 +86,9 @@ html, body {
   inset: 0;
   display: none;
   align-items: center;
-  padding: 0 12px;
+  padding: 0 var(--padX);
   color: #b7b7b7;
-  font-size: 13px;
+  font-size: calc(var(--fontSize) - 2px);
 }
 
 a { color: inherit; text-decoration: none; }
@@ -96,8 +97,6 @@ a { color: inherit; text-decoration: none; }
 
 <body>
 <div class="bar">
-  <div class="label">HEADLINES</div>
-
   <div class="track">
     <div id="status" class="status">Loading headlines...</div>
     <div id="marquee" class="marquee"></div>
@@ -106,23 +105,23 @@ a { color: inherit; text-decoration: none; }
 
 <script>
 /*
-HEADLINES TICKER (Top 5) for a wide horizontal row
+HEADLINES TICKER Rev2 (Top 5)
 
-How it works:
-- Fetches RSS feeds
-- Uses a simple public CORS proxy (AllOrigins) to avoid cross-origin blocks
-- Parses RSS XML and builds a scrolling ticker
+Adjustable options (at top):
+- FONT_SIZE_PX: headline size
+- SOURCE_SIZE_PX: source label size
+- SPEED_PX_PER_SEC: scroll speed
+- MAX_ITEMS: how many headlines to show
+- REFRESH_MINUTES: refresh interval
 
-Edit these:
-- FEEDS: list of RSS feeds
-- MAX_ITEMS: number of headlines to show
-- SCROLL_PX_PER_SEC: speed
-- REFRESH_MINUTES: re-fetch interval
-
-Notes:
-- If a feed is down, it will be skipped.
-- Headlines are clickable (opens in the iframe page if clicked).
+Note: uses AllOrigins CORS proxy to fetch RSS.
 */
+
+const FONT_SIZE_PX = 46;
+const SOURCE_SIZE_PX = 43;
+const SPEED_PX_PER_SEC = 67;
+const MAX_ITEMS = 10;
+const REFRESH_MINUTES = 10;
 
 const FEEDS = [
   { name: "BBC", url: "https://feeds.bbci.co.uk/news/rss.xml" },
@@ -131,9 +130,8 @@ const FEEDS = [
   { name: "NPR", url: "https://feeds.npr.org/1001/rss.xml" }
 ];
 
-const MAX_ITEMS = 5;
-const SCROLL_PX_PER_SEC = 90;
-const REFRESH_MINUTES = 10;
+document.documentElement.style.setProperty("--fontSize", FONT_SIZE_PX + "px");
+document.documentElement.style.setProperty("--sourceSize", SOURCE_SIZE_PX + "px");
 
 const statusEl = document.getElementById("status");
 const marqueeEl = document.getElementById("marquee");
@@ -148,8 +146,6 @@ function hideStatus() {
 }
 
 function proxy(url) {
-  // AllOrigins raw endpoint returns the upstream response body
-  // If AllOrigins ever changes, swap this for another proxy or host your own.
   return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
 }
 
@@ -217,7 +213,6 @@ function buildMarquee(items) {
     marqueeEl.appendChild(span);
   }
 
-  // Duplicate content so the loop is seamless
   const clone = marqueeEl.cloneNode(true);
   clone.id = "";
   marqueeEl.appendChild(clone);
@@ -237,7 +232,7 @@ function startScroll() {
     const dt = (ts - lastTs) / 1000;
     lastTs = ts;
 
-    x -= SCROLL_PX_PER_SEC * dt;
+    x -= SPEED_PX_PER_SEC * dt;
 
     const contentWidth = marqueeEl.scrollWidth / 2;
     if (contentWidth > 0 && Math.abs(x) >= contentWidth) x = 0;
@@ -259,14 +254,7 @@ async function refresh() {
     }
 
     items = dedupeByTitle(items);
-
-    // Prefer newest if pubDate exists, otherwise keep order
-    items.sort((a, b) => {
-      const ta = Date.parse(a.pubDate) || 0;
-      const tb = Date.parse(b.pubDate) || 0;
-      return tb - ta;
-    });
-
+    items.sort((a, b) => (Date.parse(b.pubDate) || 0) - (Date.parse(a.pubDate) || 0));
     items = items.slice(0, MAX_ITEMS);
 
     buildMarquee(items);
