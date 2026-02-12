@@ -1,3 +1,4 @@
+```html
 <!doctype html>
 <html>
 <head>
@@ -15,23 +16,19 @@ html, body {
 }
 
 .wrap {
-  max-width: 1000px;
-  margin: 20px auto;
-  padding: 18px;
+  max-width: 980px;
+  margin: 18px auto;
+  padding: 16px;
 }
 
-h1 {
-  margin: 0 0 12px 0;
+h1, h2 {
+  margin: 0 0 10px 0;
   font-weight: 600;
-}
-
-small {
-  color: #b7b7b7;
 }
 
 label {
   display: block;
-  margin: 14px 0 6px 0;
+  margin: 10px 0 6px 0;
 }
 
 input[type="text"], textarea, select {
@@ -59,7 +56,7 @@ textarea {
 .btns {
   display: flex;
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 12px;
   flex-wrap: wrap;
 }
 
@@ -67,7 +64,7 @@ button {
   background: #1f6feb;
   color: #fff;
   border: 0;
-  padding: 10px 14px;
+  padding: 10px 12px;
   border-radius: 6px;
   cursor: pointer;
 }
@@ -76,65 +73,102 @@ button.secondary {
   background: #333;
 }
 
+small {
+  color: #b7b7b7;
+}
+
 .code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 13px;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid #222;
+  margin: 18px 0;
 }
 </style>
 </head>
 
 <body>
 <div class="wrap">
+  <h1>Wallboard URL Encoder Rev2</h1>
+  <small>
+    Paste an HLS .m3u8 URL (or any URL) and this page generates a ready-to-copy player.html link.
+    This version avoids double-encoding. It also includes a decoder section to verify the src value.
+  </small>
 
-<h1>Wallboard URL Encoder Rev2</h1>
+  <label for="base">Player base URL</label>
+  <input id="base" type="text" value="https://solutionssquad.github.io/shulboard/player.html" />
 
-<small>
-Paste a stream URL below. This page generates a fully ready-to-use
-player.html link with proper encoding (single encode only).
-No double encoding.
-</small>
+  <label for="src">Stream URL (raw, NOT encoded)</label>
+  <textarea id="src" placeholder="https://example.com/live/master.m3u8"></textarea>
 
-<label for="base">Player base URL</label>
-<input id="base" type="text"
-value="https://solutionssquad.github.io/shulboard/player.html" />
-
-<label for="src">Stream URL (.m3u8 or other)</label>
-<textarea id="src" placeholder="https://example.com/live/master.m3u8"></textarea>
-
-<div class="row">
-  <div>
-    <label for="fit">fit</label>
-    <select id="fit">
-      <option value="contain" selected>contain (no crop, may show bars)</option>
-      <option value="cover">cover (crop-fill, no bars)</option>
-    </select>
+  <div class="row">
+    <div>
+      <label for="fit">fit</label>
+      <select id="fit">
+        <option value="contain" selected>contain (no crop, may show bars)</option>
+        <option value="cover">cover (crop-fill, no bars)</option>
+      </select>
+    </div>
+    <div>
+      <label for="muted">muted</label>
+      <select id="muted">
+        <option value="1" selected>1 (recommended)</option>
+        <option value="0">0</option>
+      </select>
+    </div>
   </div>
-  <div>
-    <label for="muted">muted</label>
-    <select id="muted">
-      <option value="1" selected>1 (recommended)</option>
-      <option value="0">0</option>
-    </select>
+
+  <label for="reload">reload (minutes, 0 disables)</label>
+  <input id="reload" type="text" value="60" />
+
+  <div class="btns">
+    <button id="gen">Generate</button>
+    <button class="secondary" id="copy">Copy output</button>
+    <button class="secondary" id="clear">Clear</button>
   </div>
-</div>
 
-<label for="reload">reload (minutes, 0 disables)</label>
-<input id="reload" type="text" value="60" />
+  <label for="out">Output (paste into wallboard URLS map)</label>
+  <textarea id="out" class="code" readonly></textarea>
 
-<div class="btns">
-  <button id="gen">Generate</button>
-  <button class="secondary" id="copy">Copy Output</button>
-  <button class="secondary" id="clear">Clear</button>
-</div>
+  <small>
+    Example wallboard usage:
+    <span class="code">URL7: "&lt;output&gt;"</span>
+  </small>
 
-<label for="out">Ready-to-use URL (copy into wallboard URLS map)</label>
-<textarea id="out" class="code" readonly></textarea>
+  <hr />
 
-<small>
-If the output contains %253A or %252F, something is wrong.
-Correct encoding contains %3A and %2F only.
-</small>
+  <h2>Decoder / Reverse Check</h2>
+  <small>
+    Paste a full player.html URL below. This will extract the src parameter and decode it (once and twice),
+    so you can immediately spot double-encoding issues (%253A means encoded twice).
+  </small>
 
+  <label for="fullUrl">Full player URL to decode</label>
+  <textarea id="fullUrl" placeholder="https://solutionssquad.github.io/shulboard/player.html?src=..."></textarea>
+
+  <div class="btns">
+    <button id="decode">Decode</button>
+    <button class="secondary" id="copyDecoded">Copy decoded src</button>
+  </div>
+
+  <div class="row">
+    <div>
+      <label for="srcRaw">Extracted src (as stored in query)</label>
+      <textarea id="srcRaw" class="code" readonly></textarea>
+    </div>
+    <div>
+      <label for="srcDecoded">Decoded src (best guess)</label>
+      <textarea id="srcDecoded" class="code" readonly></textarea>
+    </div>
+  </div>
+
+  <small>
+    If <span class="code">srcRaw</span> contains <span class="code">%253A</span> or <span class="code">%252F</span>, it is double-encoded.
+    Correct encoding should have <span class="code">%3A</span> and <span class="code">%2F</span> only.
+  </small>
 </div>
 
 <script>
@@ -154,37 +188,73 @@ function build() {
   if (!base) return "Missing player base URL.";
   if (!src) return "Missing stream URL.";
 
-  // IMPORTANT: DO NOT manually encode src.
-  // URLSearchParams handles encoding exactly once.
+  // IMPORTANT: Do NOT pre-encode. URLSearchParams will encode once.
   const params = new URLSearchParams();
   params.set("src", src);
   params.set("fit", fit);
   params.set("muted", muted);
 
   const r = parseInt(reload, 10);
-  if (!isNaN(r) && r > 0) {
-    params.set("reload", String(r));
-  }
+  if (!isNaN(r) && r > 0) params.set("reload", String(r));
 
   return base + "?" + params.toString();
+}
+
+function safeDecodeOnce(s) {
+  try { return decodeURIComponent(s); } catch (e) { return s; }
+}
+
+function bestDecode(s) {
+  // Decode twice to handle accidental double-encoding
+  const once = safeDecodeOnce(s);
+  const twice = safeDecodeOnce(once);
+  // If decoding changed the string, prefer the most-decoded form
+  if (twice !== once) return twice;
+  return once;
+}
+
+async function copyText(text) {
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    // fallback
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+  }
+}
+
+function decodeFullUrl() {
+  const full = clean($("fullUrl").value);
+  if (!full) {
+    $("srcRaw").value = "";
+    $("srcDecoded").value = "";
+    return;
+  }
+
+  let u;
+  try {
+    u = new URL(full);
+  } catch (e) {
+    $("srcRaw").value = "Invalid URL";
+    $("srcDecoded").value = "";
+    return;
+  }
+
+  const raw = u.searchParams.get("src") || "";
+  $("srcRaw").value = raw;
+  $("srcDecoded").value = bestDecode(raw);
 }
 
 $("gen").addEventListener("click", () => {
   $("out").value = build();
 });
 
-$("copy").addEventListener("click", async () => {
-  const value = $("out").value;
-  if (!value) return;
-
-  try {
-    await navigator.clipboard.writeText(value);
-  } catch (e) {
-    $("out").focus();
-    $("out").select();
-    document.execCommand("copy");
-  }
-});
+$("copy").addEventListener("click", () => copyText($("out").value));
 
 $("clear").addEventListener("click", () => {
   $("src").value = "";
@@ -192,17 +262,24 @@ $("clear").addEventListener("click", () => {
   $("src").focus();
 });
 
-// Auto-generate as you type
+$("decode").addEventListener("click", decodeFullUrl);
+
+$("copyDecoded").addEventListener("click", () => copyText($("srcDecoded").value));
+
+// Auto-generate on input
 $("src").addEventListener("input", () => {
-  if ($("src").value.trim().length > 8) {
-    $("out").value = build();
-  }
+  const s = clean($("src").value);
+  if (s.length > 8) $("out").value = build();
 });
 $("fit").addEventListener("change", () => $("out").value = build());
 $("muted").addEventListener("change", () => $("out").value = build());
 $("reload").addEventListener("input", () => $("out").value = build());
 $("base").addEventListener("input", () => $("out").value = build());
+
+// Auto-decode on input
+$("fullUrl").addEventListener("input", decodeFullUrl);
 </script>
 
 </body>
 </html>
+```
