@@ -3,14 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Universal Player Rev4</title>
+<title>Universal Player Rev2</title>
 
-<!-- Clappr -->
 <script src="https://cdn.jsdelivr.net/gh/clappr/clappr@latest/dist/clappr.min.js"></script>
-
-<!-- Video.js (fallback engine) -->
-<link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
-<script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
 
 <style>
 html, body {
@@ -28,6 +23,7 @@ html, body {
   background: #000;
 }
 
+/* Common full-bleed */
 .full {
   position: fixed;
   inset: 0;
@@ -36,26 +32,23 @@ html, body {
   background: #000;
 }
 
-/* Make both engines full-bleed */
+/* Clappr fill */
 #root .clappr-player,
 #root .container,
 #root .player,
 #root .media,
-#root video,
-#root .video-js,
-#root .video-js .vjs-tech {
+#root video {
   width: 100% !important;
   height: 100% !important;
 }
 
-/* Default fit behavior */
-#root video,
-#root .video-js .vjs-tech {
+/* Default fit behavior, can be overridden by ?fit=cover */
+#root video {
   object-fit: contain;
   background: #000;
 }
 
-/* Hide overlays (Clappr + Video.js) */
+/* Hide any overlays */
 #root .media-control,
 #root .spinner,
 #root .vjs-control-bar,
@@ -71,38 +64,6 @@ html, body {
 <div id="root"></div>
 
 <script>
-/*
-Universal Player Rev4
-
-Modes:
-
-A) HLS direct (recommended)
-- Required: src (URL-encoded recommended)
-- Optional: engine=auto|clappr|videojs (default auto)
-- Optional: fit=contain|cover (default contain)
-- Optional: reload=minutes (0 disables)
-
-Examples:
-
-1) AUTO engine (tries Clappr then falls back to Video.js):
-player.html?src=https%3A%2F%2Fabcnews-streams.akamaized.net%2Fhls%2Flive%2F2023561%2Fabcnewshudson2%2Fmaster.m3u8&engine=auto&fit=contain&reload=60
-
-2) Force Clappr:
-player.html?src=https%3A%2F%2Flinear417-gb-hls1-prd-ak.cdn.skycdp.com%2F100e%2FContent%2FHLS_001_1080_30%2FLive%2Fchannel(skynews)%2Findex_1080-30.m3u8&engine=clappr&fit=contain
-
-3) Force Video.js (use this when Clappr fails):
-player.html?src=https%3A%2F%2Ffox-foxnewsnow-vizio.amagi.tv%2Fplaylist.m3u8&engine=videojs&fit=contain&reload=60
-
-B) Brightcove embed (when you cannot get the raw .m3u8)
-- Required: brightcove=1
-- Required: account, player, video
-- Optional: fit=contain|cover (default contain)
-- Optional: reload=minutes
-
-Example:
-player.html?brightcove=1&account=4368278029001&player=HyZhqV2ePb&video=6024028001001&fit=contain&reload=60
-*/
-
 function qp(name) {
   return new URL(window.location.href).searchParams.get(name);
 }
@@ -111,193 +72,4 @@ function qpi(name, defVal) {
   return Number.isFinite(v) ? v : defVal;
 }
 
-const root = document.getElementById("root");
-
-function showError(msg) {
-  root.innerHTML =
-    "<div style='color:#fff;font:16px Arial;padding:12px;white-space:pre-wrap'>" +
-    msg +
-    "</div>";
-}
-
-function loadScript(url, cb) {
-  const s = document.createElement("script");
-  s.src = url;
-  s.async = true;
-  s.onload = cb;
-  s.onerror = () => showError("Failed to load script:\n" + url);
-  document.head.appendChild(s);
-}
-
-/* Fit handling */
-const fit = (qp("fit") || "contain").toLowerCase();
-if (fit === "cover") {
-  const s = document.createElement("style");
-  s.textContent = "#root video, #root .video-js .vjs-tech{object-fit:cover!important}";
-  document.head.appendChild(s);
-}
-
-/* Optional periodic reload */
-const reloadMinutes = qpi("reload", 0);
-if (reloadMinutes > 0) {
-  setTimeout(() => location.reload(), reloadMinutes * 60 * 1000);
-}
-
-/* Params */
-const src = qp("src");
-const engine = (qp("engine") || "auto").toLowerCase();
-
-const brightcove = qp("brightcove");
-const account = qp("account");
-const bcPlayer = qp("player");
-const videoId = qp("video");
-
-/* Engines */
-let clapprInstance = null;
-let vjsInstance = null;
-
-function cleanupPlayers() {
-  try {
-    if (clapprInstance && clapprInstance.destroy) clapprInstance.destroy();
-  } catch (e) {}
-  clapprInstance = null;
-
-  try {
-    if (vjsInstance && vjsInstance.dispose) vjsInstance.dispose();
-  } catch (e) {}
-  vjsInstance = null;
-}
-
-function startClappr(hlsUrl, onFail) {
-  cleanupPlayers();
-  root.innerHTML = "<div id='clp' class='full'></div>";
-
-  try {
-    clapprInstance = new Clappr.Player({
-      source: hlsUrl,
-      parentId: "#clp",
-      autoPlay: true,
-      mute: true,
-      chromeless: true,
-      loop: true,
-      width: "100%",
-      height: "100%",
-      playback: { playInline: true }
-    });
-
-    const failOnce = () => {
-      if (typeof onFail === "function") onFail();
-    };
-
-    if (clapprInstance && clapprInstance.on) {
-      clapprInstance.on(Clappr.Events.PLAYER_ERROR, failOnce);
-    } else {
-      setTimeout(failOnce, 6000);
-    }
-
-    setTimeout(() => {
-      const el = document.querySelector("#clp video");
-      if (!el) return;
-      if (el.readyState === 0) {
-        if (typeof onFail === "function") onFail();
-      }
-    }, 8000);
-
-  } catch (e) {
-    if (typeof onFail === "function") onFail();
-  }
-}
-
-function startVideojs(hlsUrl) {
-  cleanupPlayers();
-  root.innerHTML = "<video id='vjs' class='video-js full' autoplay muted playsinline preload='auto'></video>";
-
-  if (typeof videojs !== "function") {
-    showError("Video.js is not available.");
-    return;
-  }
-
-  vjsInstance = videojs("vjs", {
-    autoplay: true,
-    muted: true,
-    controls: false,
-    liveui: true,
-    preload: "auto",
-    sources: [{ src: hlsUrl, type: "application/x-mpegURL" }]
-  });
-
-  vjsInstance.on("error", () => setTimeout(() => location.reload(), 3000));
-  vjsInstance.on("stalled", () => setTimeout(() => location.reload(), 5000));
-}
-
-function startBrightcove() {
-  if (!account || !bcPlayer || !videoId) {
-    showError("Brightcove mode needs:\n?brightcove=1&account=...&player=...&video=...");
-    return;
-  }
-
-  cleanupPlayers();
-  root.innerHTML =
-    "<video id='bc' class='video-js full' " +
-    "data-account='" + account + "' " +
-    "data-player='" + bcPlayer + "' " +
-    "data-video-id='" + videoId + "' " +
-    "data-embed='default' " +
-    "playsinline autoplay muted preload='auto'></video>";
-
-  const bcUrl = "https://players.brightcove.net/" + account + "/" + bcPlayer + "_default/index.min.js";
-  loadScript(bcUrl, () => {
-    if (typeof videojs !== "function") {
-      showError("Brightcove loaded but videojs is unavailable.");
-      return;
-    }
-
-    vjsInstance = videojs("bc", {
-      autoplay: true,
-      muted: true,
-      controls: false,
-      liveui: true,
-      preload: "auto"
-    });
-
-    vjsInstance.ready(function () {
-      const p = this;
-
-      p.on("loadedmetadata", function () {
-        try {
-          const tracks = p.remoteTextTracks();
-          if (tracks && tracks.length > 0) {
-            for (let i = 0; i < tracks.length; i++) {
-              if (tracks[i].kind === "captions" || tracks[i].kind === "subtitles") {
-                tracks[i].mode = "showing";
-                break;
-              }
-            }
-          }
-        } catch (e) {}
-      });
-
-      p.on("error", () => setTimeout(() => location.reload(), 3000));
-      p.on("stalled", () => setTimeout(() => location.reload(), 5000));
-    });
-  });
-}
-
-/* Router */
-if (brightcove === "1" || brightcove === "true") {
-  startBrightcove();
-} else if (src) {
-  if (engine === "videojs") {
-    startVideojs(src);
-  } else if (engine === "clappr") {
-    startClappr(src, () => showError("Clappr failed to load this stream.\nTry engine=videojs.\n\n" + src));
-  } else {
-    startClappr(src, () => startVideojs(src));
-  }
-} else {
-  showError("Missing parameters.\n\nUse either:\n  ?src=ENCODED_M3U8&engine=auto|clappr|videojs&fit=contain|cover&reload=minutes\n\nOr:\n  ?brightcove=1&account=...&player=...&video=...&fit=contain|cover&reload=minutes");
-}
-</script>
-
-</body>
-</html>
+const fit = (qp("fit") || "contain").toLow
