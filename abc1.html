@@ -1,11 +1,104 @@
+<!doctype html>
+<html>
 <head>
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/clappr/clappr@latest/dist/clappr.min.js"></script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ABC News Live First</title>
+
+<script src="https://cdn.jsdelivr.net/gh/clappr/clappr@latest/dist/clappr.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/clappr-hlsjs-playback@latest/dist/hlsjs-playback.min.js"></script>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+#player {
+  position: fixed;
+  inset: 0;
+  background: #000;
+}
+
+/* Force every Clappr wrapper to fill */
+#player .clappr-player,
+#player .container,
+#player .player,
+#player .media,
+#player video {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* No zoom, no distortion */
+#player video {
+  object-fit: contain !important;
+  background: #000;
+}
+
+/* Remove overlays */
+#player .media-control,
+#player .spinner {
+  display: none !important;
+}
+</style>
 </head>
-<body bgcolor="#000000">
-  <div id="player" style="display: block; width: 100%; height: 100%;"></div>
-  <script>
- //   var player = new Clappr.Player({source: "https://abclive1-lh.akamaihd.net/i/abc_live01@423395/index_400_av-p.m3u8", width: "100%", height: "100%",  mute: true, loop: true, chromeless: true, autoPlay: true, parentId: "#player"});
-   var player = new Clappr.Player({source: "https://content.uplynk.com/channel/3324f2467c414329b3b0cc5cd987b6be.m3u8", width: "100%", height: "100%",  mute: true, loop: true, chromeless: true, autoPlay: true, parentId: "#player"});    
-    
-  </script>
-  </body>
+
+<body>
+<div id="player"></div>
+
+<script>
+(function () {
+  var SOURCE = "https://content.uplynk.com/channel/3324f2467c414329b3b0cc5cd987b6be.m3u8";
+
+  var player = new Clappr.Player({
+    source: SOURCE,
+    parentId: "#player",
+    autoPlay: true,
+    mute: true,
+    chromeless: true,
+    loop: true,
+    width: "100%",
+    height: "100%",
+    playback: { playInline: true },
+
+    plugins: [HlsjsPlayback],
+    hlsjsConfig: {
+      enableWorker: true,
+      lowLatencyMode: false,
+      backBufferLength: 90,
+      enableCEA708Captions: true,
+      renderTextTracksNatively: true
+    }
+  });
+
+  function tryEnableCaptions() {
+    try {
+      var el = player && player.core && player.core.mediaControl && player.core.mediaControl.container;
+      var video = el ? el.querySelector("video") : null;
+      if (!video || !video.textTracks) return;
+
+      for (var i = 0; i < video.textTracks.length; i++) {
+        var t = video.textTracks[i];
+        if (t && t.kind === "captions") {
+          t.mode = "showing";
+          return;
+        }
+      }
+    } catch (e) {}
+  }
+
+  player.on(Clappr.Events.PLAYER_READY, function () {
+    tryEnableCaptions();
+    setTimeout(tryEnableCaptions, 1500);
+    setTimeout(tryEnableCaptions, 4000);
+  });
+})();
+</script>
+
+</body>
+</html>
