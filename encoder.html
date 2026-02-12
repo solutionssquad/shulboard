@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Encoder Rev3</title>
+<title>Encoder Rev4</title>
 
 <style>
 html, body {
@@ -15,7 +15,7 @@ html, body {
 }
 
 .wrap {
-  max-width: 980px;
+  max-width: 1100px;
   margin: 18px auto;
   padding: 16px;
 }
@@ -72,40 +72,32 @@ button.secondary {
   background: #333;
 }
 
+button.tiny {
+  padding: 6px 9px;
+  font-size: 12px;
+}
+
 small {
   color: #b7b7b7;
 }
 
 .code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 13px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
 }
 
 hr {
   border: 0;
   border-top: 1px solid #222;
-  margin: 18px 0;
-}
-
-.listgrid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
+  margin: 20px 0;
 }
 
 .item {
   border: 1px solid #222;
-  background: #0f0f0f;
+  background: #101010;
   border-radius: 8px;
   padding: 10px;
-}
-
-.itemhead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
 }
 
 .itemname {
@@ -113,287 +105,167 @@ hr {
 }
 
 .itemurl {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: #d7d7d7;
+  word-break: break-all;
+  font-size: 12px;
+  color: #ccc;
+  margin-top: 4px;
 }
 
 .itembtns {
+  margin-top: 8px;
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 8px;
-}
-
-button.tiny {
-  padding: 7px 10px;
-  font-size: 12px;
 }
 </style>
 </head>
 
 <body>
 <div class="wrap">
-  <h1>Wallboard URL Encoder Rev3</h1>
-  <small>
-    Paste an HLS .m3u8 URL (or any URL) and this page generates a ready-to-copy player.html link.
-    Includes a decoder and a saved list of stream sources you can click to populate the encoder.
-  </small>
 
-  <label for="base">Player base URL</label>
-  <input id="base" type="text" value="https://solutionssquad.github.io/shulboard/player.html" />
+<h1>Wallboard Encoder Rev4</h1>
 
-  <label for="src">Stream URL (raw, NOT encoded)</label>
-  <textarea id="src" placeholder="https://example.com/live/master.m3u8"></textarea>
+<label>Player base URL</label>
+<input id="base" value="https://solutionssquad.github.io/shulboard/player.html">
 
-  <div class="row">
-    <div>
-      <label for="fit">fit</label>
-      <select id="fit">
-        <option value="contain" selected>contain (no crop, may show bars)</option>
-        <option value="cover">cover (crop-fill, no bars)</option>
-      </select>
-    </div>
-    <div>
-      <label for="muted">muted</label>
-      <select id="muted">
-        <option value="1" selected>1 (recommended)</option>
-        <option value="0">0</option>
-      </select>
-    </div>
+<label>Stream URL (raw)</label>
+<textarea id="src"></textarea>
+
+<div class="row">
+  <div>
+    <label>Fit</label>
+    <select id="fit">
+      <option value="contain" selected>contain</option>
+      <option value="cover">cover</option>
+    </select>
   </div>
-
-  <label for="reload">reload (minutes, 0 disables)</label>
-  <input id="reload" type="text" value="60" />
-
-  <div class="btns">
-    <button id="gen">Generate</button>
-    <button class="secondary" id="copy">Copy output</button>
-    <button class="secondary" id="clear">Clear</button>
+  <div>
+    <label>Muted</label>
+    <select id="muted">
+      <option value="1" selected>1</option>
+      <option value="0">0</option>
+    </select>
   </div>
+</div>
 
-  <label for="out">Output (paste into wallboard URLS map)</label>
-  <textarea id="out" class="code" readonly></textarea>
+<label>Reload (minutes, 0 disables)</label>
+<input id="reload" value="60">
 
-  <small>
-    Example wallboard usage:
-    <span class="code">URL7: "&lt;output&gt;"</span>
-  </small>
+<div class="btns">
+  <button onclick="generate()">Generate</button>
+  <button class="secondary" onclick="copyOut()">Copy Output</button>
+</div>
 
-  <hr />
+<label>Generated Player URL</label>
+<textarea id="out" readonly class="code"></textarea>
 
-  <h2>Saved stream list (click to load into encoder)</h2>
-  <small>
-    Edit the list in the <span class="code">STREAMS</span> object inside this file as you find more sources.
-    Click <span class="code">Load</span> to put the URL into the encoder, then copy the generated output.
-  </small>
+<hr>
 
-  <div id="streamList" class="listgrid"></div>
+<h2>Saved Stream List</h2>
 
-  <hr />
+<div id="streamList"></div>
 
-  <h2>Decoder / Reverse Check</h2>
-  <small>
-    Paste a full player.html URL below. This extracts the src parameter and decodes it (once and twice),
-    so you can spot double-encoding issues.
-  </small>
+<hr>
 
-  <label for="fullUrl">Full player URL to decode</label>
-  <textarea id="fullUrl" placeholder="https://solutionssquad.github.io/shulboard/player.html?src=..."></textarea>
+<h2>Decoder</h2>
 
-  <div class="btns">
-    <button id="decode">Decode</button>
-    <button class="secondary" id="copyDecoded">Copy decoded src</button>
-  </div>
+<label>Full player URL</label>
+<textarea id="decodeInput"></textarea>
 
-  <div class="row">
-    <div>
-      <label for="srcRaw">Extracted src (as stored in query)</label>
-      <textarea id="srcRaw" class="code" readonly></textarea>
-    </div>
-    <div>
-      <label for="srcDecoded">Decoded src (best guess)</label>
-      <textarea id="srcDecoded" class="code" readonly></textarea>
-    </div>
-  </div>
+<div class="btns">
+  <button onclick="decodeUrl()">Decode</button>
+</div>
 
-  <small>
-    If <span class="code">srcRaw</span> contains <span class="code">%253A</span> or <span class="code">%252F</span>, it is double-encoded.
-    Correct encoding should have <span class="code">%3A</span> and <span class="code">%2F</span> only.
-  </small>
+<label>Extracted src</label>
+<textarea id="decodeRaw" readonly class="code"></textarea>
+
+<label>Decoded src</label>
+<textarea id="decodeFinal" readonly class="code"></textarea>
+
 </div>
 
 <script>
-function $(id) { return document.getElementById(id); }
-function clean(s) { return (s || "").trim(); }
-
 const STREAMS = [
   { name: "Live now fox", url: "https://fox-foxnewsnow-vizio.amagi.tv/playlist.m3u8" },
   { name: "IL13", url: "https://d2xg1g9o5vns8m.cloudfront.net/out/v1/66d4ac8748ce4a9298b4e40e48d1ae2f/index.m3u8" },
-  { name: "i24 (Brightcove tokenized)", url: "https://fastly.live.brightcove.com/6386790908112/eu-central-1/5377161796001/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJob3N0IjoiZXJmajYzLmVncmVzcy53YzQ3bTEiLCJhY2NvdW50X2lkIjoiNTM3NzE2MTc5NjAwMSIsImVobiI6ImZhc3RseS5saXZlLmJyaWdodGNvdmUuY29tIiwiaXNzIjoiYmxpdmUtcGxheWJhY2stc291cmNlLWFwaSIsInN1YiI6InBhdGhtYXB0b2tlbiIsImF1ZCI6WyI1Mzc3MTYxNzk2MDAxIl0sImp0aSI6IjYzODY3OTA5MDgxMTIifQ._w5c3EwfnEecDCEpDaKuVz07uuEyUb3vXvQN3svv-oU/chunklist.m3u8" },
-  { name: "ABC1", url: "https://abcnews-streams.akamaized.net/hls/live/2023561/abcnewshudson2/master.m3u8" },
-  { name: "ABC2", url: "https://abcnews-streams.akamaized.net/hls/live/2023566/abcnewshudson7/master.m3u8" },
-  { name: "ABC3", url: "https://abcnews-streams.akamaized.net/hls/live/2023569/abcnewshudson10/master.m3u8" },
+  { name: "i24", url: "https://fastly.live.brightcove.com/6386790908112/eu-central-1/5377161796001/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJob3N0IjoiZXJmajYzLmVncmVzcy53YzQ3bTEiLCJhY2NvdW50X2lkIjoiNTM3NzE2MTc5NjAwMSIsImVobiI6ImZhc3RseS5saXZlLmJyaWdodGNvdmUuY29tIiwiaXNzIjoiYmxpdmUtcGxheWJhY2stc291cmNlLWFwaSIsInN1YiI6InBhdGhtYXB0b2tlbiIsImF1ZCI6WyI1Mzc3MTYxNzk2MDAxIl0sImp0aSI6IjYzODY3OTA5MDgxMTIifQ._w5c3EwfnEecDCEpDaKuVz07uuEyUb3vXvQN3svv-oU/chunklist.m3u8" },
+  { name: "ABC2", url: "https://abcnews-streams.akamaized.net/hls/live/2023561/abcnewshudson2/master.m3u8" },
+  { name: "ABC3", url: "https://abcnews-streams.akamaized.net/hls/live/2023562/abcnewshudson3/master.m3u8" },
+  { name: "ABC4", url: "https://abcnews-streams.akamaized.net/hls/live/2023563/abcnewshudson4/master.m3u8" },
+  { name: "ABC5", url: "https://abcnews-streams.akamaized.net/hls/live/2023564/abcnewshudson5/master.m3u8" },
+  { name: "ABC6", url: "https://abcnews-streams.akamaized.net/hls/live/2023565/abcnewshudson6/master.m3u8" },
+  { name: "ABC7", url: "https://abcnews-streams.akamaized.net/hls/live/2023566/abcnewshudson7/master.m3u8" },
+  { name: "ABC8", url: "https://abcnews-streams.akamaized.net/hls/live/2023567/abcnewshudson8/master.m3u8" },
+  { name: "ABC9", url: "https://abcnews-streams.akamaized.net/hls/live/2023568/abcnewshudson9/master.m3u8" },
+  { name: "ABC10", url: "https://abcnews-streams.akamaized.net/hls/live/2023569/abcnewshudson10/master.m3u8" },
   { name: "Bloomberg", url: "https://liveprodusphoenixeast.akamaized.net/USPhx-HD/Channel-TX-USPhx-AWS-virginia-1/Source-USPhx-16k-1-s6lk2-BP-07-02-81ykIWnsMsg_live.m3u8" },
   { name: "GlobalNews", url: "https://live.corusdigitaldev.com/groupd/live/49a91e7f-1023-430f-8d66-561055f3d0f7/live.isml/live-audio_1=96000-video=2499968.m3u8" },
-  { name: "Sky news (RT stream in your list)", url: "https://rt-glb.rttv.com/dvr/rtnews/playlist.m3u8" }
+  { name: "RT", url: "https://rt-glb.rttv.com/dvr/rtnews/playlist.m3u8" },
+  { name: "Sky news", url: "https://linear417-gb-hls1-prd-ak.cdn.skycdp.com/100e/Content/HLS_001_1080_30/Live/channel(skynews)/index_1080-30.m3u8" }
 ];
 
-function build() {
-  const base = clean($("base").value);
-  const src = clean($("src").value);
-  const fit = $("fit").value;
-  const muted = $("muted").value;
-  const reload = clean($("reload").value) || "0";
-
-  if (!base) return "Missing player base URL.";
-  if (!src) return "Missing stream URL.";
+function generate() {
+  const base = document.getElementById("base").value.trim();
+  const src = document.getElementById("src").value.trim();
+  const fit = document.getElementById("fit").value;
+  const muted = document.getElementById("muted").value;
+  const reload = document.getElementById("reload").value.trim();
 
   const params = new URLSearchParams();
-  params.set("src", src);          // DO NOT pre-encode
+  params.set("src", src);
   params.set("fit", fit);
   params.set("muted", muted);
+  if (reload !== "0" && reload !== "") params.set("reload", reload);
 
-  const r = parseInt(reload, 10);
-  if (!isNaN(r) && r > 0) params.set("reload", String(r));
-
-  return base + "?" + params.toString();
+  document.getElementById("out").value = base + "?" + params.toString();
 }
 
-function safeDecodeOnce(s) {
-  try { return decodeURIComponent(s); } catch (e) { return s; }
+function copyOut() {
+  const out = document.getElementById("out");
+  out.select();
+  document.execCommand("copy");
 }
 
-function bestDecode(s) {
-  const once = safeDecodeOnce(s);
-  const twice = safeDecodeOnce(once);
-  if (twice !== once) return twice;
-  return once;
-}
-
-async function copyText(text) {
-  if (!text) return;
+function decodeUrl() {
+  const full = document.getElementById("decodeInput").value.trim();
   try {
-    await navigator.clipboard.writeText(text);
-  } catch (e) {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand("copy");
-    document.body.removeChild(ta);
+    const u = new URL(full);
+    const raw = u.searchParams.get("src") || "";
+    document.getElementById("decodeRaw").value = raw;
+    document.getElementById("decodeFinal").value = decodeURIComponent(decodeURIComponent(raw));
+  } catch {
+    document.getElementById("decodeRaw").value = "Invalid URL";
+    document.getElementById("decodeFinal").value = "";
   }
 }
 
-function decodeFullUrl() {
-  const full = clean($("fullUrl").value);
-  if (!full) {
-    $("srcRaw").value = "";
-    $("srcDecoded").value = "";
-    return;
-  }
-
-  let u;
-  try {
-    u = new URL(full);
-  } catch (e) {
-    $("srcRaw").value = "Invalid URL";
-    $("srcDecoded").value = "";
-    return;
-  }
-
-  const raw = u.searchParams.get("src") || "";
-  $("srcRaw").value = raw;
-  $("srcDecoded").value = bestDecode(raw);
-}
-
-function renderStreamList() {
-  const host = $("streamList");
-  host.innerHTML = "";
-
-  STREAMS.forEach((s) => {
+function renderList() {
+  const container = document.getElementById("streamList");
+  STREAMS.forEach(s => {
     const div = document.createElement("div");
     div.className = "item";
-
-    const head = document.createElement("div");
-    head.className = "itemhead";
-
-    const left = document.createElement("div");
-    const name = document.createElement("div");
-    name.className = "itemname";
-    name.textContent = s.name;
-
-    const url = document.createElement("div");
-    url.className = "itemurl code";
-    url.textContent = s.url;
-
-    left.appendChild(name);
-    left.appendChild(url);
-
-    head.appendChild(left);
-    div.appendChild(head);
-
-    const btns = document.createElement("div");
-    btns.className = "itembtns";
-
-    const load = document.createElement("button");
-    load.className = "tiny";
-    load.textContent = "Load";
-    load.addEventListener("click", () => {
-      $("src").value = s.url;
-      $("out").value = build();
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      $("src").focus();
-    });
-
-    const copyRaw = document.createElement("button");
-    copyRaw.className = "tiny secondary";
-    copyRaw.textContent = "Copy raw";
-    copyRaw.addEventListener("click", () => copyText(s.url));
-
-    const copyReady = document.createElement("button");
-    copyReady.className = "tiny secondary";
-    copyReady.textContent = "Copy ready";
-    copyReady.addEventListener("click", () => {
-      $("src").value = s.url;
-      const out = build();
-      $("out").value = out;
-      copyText(out);
-    });
-
-    btns.appendChild(load);
-    btns.appendChild(copyRaw);
-    btns.appendChild(copyReady);
-
-    div.appendChild(btns);
-    host.appendChild(div);
+    div.innerHTML = `
+      <div class="itemname">${s.name}</div>
+      <div class="itemurl">${s.url}</div>
+      <div class="itembtns">
+        <button class="tiny" onclick="loadStream('${s.url.replace(/'/g,"\\'")}')">Load</button>
+        <button class="tiny secondary" onclick="copyText('${s.url.replace(/'/g,"\\'")}')">Copy Raw</button>
+      </div>
+    `;
+    container.appendChild(div);
   });
 }
 
-$("gen").addEventListener("click", () => { $("out").value = build(); });
-$("copy").addEventListener("click", () => copyText($("out").value));
-$("clear").addEventListener("click", () => {
-  $("src").value = "";
-  $("out").value = "";
-  $("src").focus();
-});
+function loadStream(url) {
+  document.getElementById("src").value = url;
+  generate();
+  window.scrollTo(0,0);
+}
 
-$("decode").addEventListener("click", decodeFullUrl);
-$("copyDecoded").addEventListener("click", () => copyText($("srcDecoded").value));
+function copyText(text) {
+  navigator.clipboard.writeText(text);
+}
 
-$("src").addEventListener("input", () => {
-  const s = clean($("src").value);
-  if (s.length > 8) $("out").value = build();
-});
-$("fit").addEventListener("change", () => $("out").value = build());
-$("muted").addEventListener("change", () => $("out").value = build());
-$("reload").addEventListener("input", () => $("out").value = build());
-$("base").addEventListener("input", () => $("out").value = build());
-
-$("fullUrl").addEventListener("input", decodeFullUrl);
-
-renderStreamList();
+renderList();
 </script>
 
 </body>
