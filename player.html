@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Universal Player Rev1</title>
+<title>Universal Player Rev3</title>
 
 <script src="https://cdn.jsdelivr.net/gh/clappr/clappr@latest/dist/clappr.min.js"></script>
 
@@ -17,56 +17,135 @@ html, body {
   overflow: hidden;
 }
 
-#player {
+#root {
   position: fixed;
   inset: 0;
   background: #000;
 }
 
-#player .clappr-player,
-#player .container,
-#player .player,
-#player .media,
-#player video {
+/* Common full-bleed */
+.full {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+
+/* Clappr fill */
+#root .clappr-player,
+#root .container,
+#root .player,
+#root .media,
+#root video {
   width: 100% !important;
   height: 100% !important;
 }
 
-#player video {
-  object-fit: contain !important; /* change to cover if you prefer crop-fill */
+/* Default fit behavior */
+#root video {
+  object-fit: contain;
   background: #000;
 }
 
-#player .media-control,
-#player .spinner {
+/* Hide overlays (Clappr + Brightcove/Video.js) */
+#root .media-control,
+#root .spinner,
+#root .vjs-control-bar,
+#root .vjs-big-play-button,
+#root .vjs-loading-spinner,
+#root .vjs-modal-dialog {
   display: none !important;
 }
 </style>
 </head>
 
 <body>
-<div id="player"></div>
+<div id="root"></div>
 
 <script>
-function getParam(name) {
-  const u = new URL(window.location.href);
-  return u.searchParams.get(name);
+/*
+Universal Player Rev3
+
+Two usage modes:
+
+1) HLS/Clappr mode (direct .m3u8)
+   - Required: src (URL-encoded recommended)
+   - Optional: fit=contain|cover (default contain)
+   - Optional: reload=minutes (0 = disabled)
+
+Examples:
+
+A) Simple:
+   player.html?src=https%3A%2F%2Fabcnews-streams.akamaized.net%2Fhls%2Flive%2F2023561%2Fabcnewshudson2%2Fmaster.m3u8
+
+B) With options:
+   player.html?src=https%3A%2F%2Fabcnews-streams.akamaized.net%2Fhls%2Flive%2F2023561%2Fabcnewshudson2%2Fmaster.m3u8&fit=contain&reload=60
+
+C) Crop-fill (removes bars, may crop edges):
+   player.html?src=https%3A%2F%2Flinear417-gb-hls1-prd-ak.cdn.skycdp.com%2F100e%2FContent%2FHLS_001_1080_30%2FLive%2Fchannel(skynews)%2Findex_1080-30.m3u8&fit=cover&reload=60
+
+
+2) Brightcove mode (when you cannot get the raw .m3u8)
+   - Required: brightcove=1
+   - Required: account, player, video
+   - Optional: fit=contain|cover (default contain)
+   - Optional: reload=minutes (0 = disabled)
+
+Examples:
+
+D) Brightcove (7News example):
+   player.html?brightcove=1&account=4368278029001&player=HyZhqV2ePb&video=6024028001001
+
+E) Brightcove with options:
+   player.html?brightcove=1&account=4368278029001&player=HyZhqV2ePb&video=6024028001001&fit=contain&reload=60
+*/
+
+function qp(name) {
+  return new URL(window.location.href).searchParams.get(name);
+}
+function qpi(name, defVal) {
+  const v = parseInt(qp(name) || "", 10);
+  return Number.isFinite(v) ? v : defVal;
 }
 
-const src = getParam("src");
-if (!src) {
-  document.body.innerHTML = "<div style='color:#fff;font:16px Arial;padding:12px'>Missing ?src= (URL-encoded m3u8)</div>";
-} else {
-  const fit = (getParam("fit") || "contain").toLowerCase();
-  if (fit === "cover") {
-    document.documentElement.style.setProperty("--fit", "cover");
-    const style = document.createElement("style");
-    style.textContent = "#player video{object-fit:cover!important}";
-    document.head.appendChild(style);
-  }
+const fit = (qp("fit") || "contain").toLowerCase();
+if (fit === "cover") {
+  const s = document.createElement("style");
+  s.textContent = "#root video{object-fit:cover!important}";
+  document.head.appendChild(s);
+}
 
-  var player = new Clappr.Player({
-    source: src,
+const reloadMinutes = qpi("reload", 0);
+if (reloadMinutes > 0) {
+  setTimeout(() => location.reload(), reloadMinutes * 60 * 1000);
+}
+
+const root = document.getElementById("root");
+
+const src = qp("src");
+const brightcove = qp("brightcove");
+const account = qp("account");
+const bcPlayer = qp("player");
+const videoId = qp("video");
+
+function showError(msg) {
+  root.innerHTML = "<div style='color:#fff;font:16px Arial;padding:12px;white-space:pre-wrap'>" + msg + "</div>";
+}
+
+function loadScript(url, cb) {
+  const s = document.createElement("script");
+  s.src = url;
+  s.async = true;
+  s.onload = cb;
+  s.onerror = () => showError("Failed to load script:\n" + url);
+  document.head.appendChild(s);
+}
+
+function startClappr(hlsUrl) {
+  root.innerHTML = "<div id='player' class='full'></div>";
+  new Clappr.Player({
+    source: hlsUrl,
     parentId: "#player",
     autoPlay: true,
     mute: true,
@@ -76,12 +155,72 @@ if (!src) {
     height: "100%",
     playback: { playInline: true }
   });
+}
 
-  // Optional self-heal: reload if playback stalls
-  const RELOAD_MINUTES = parseInt(getParam("reload") || "0", 10);
-  if (RELOAD_MINUTES > 0) {
-    setTimeout(() => location.reload(), RELOAD_MINUTES * 60 * 1000);
+function startBrightcove() {
+  if (!account || !bcPlayer || !videoId) {
+    showError("Brightcove mode needs:\n?brightcove=1&account=...&player=...&video=...\nOptional: &fit=contain|cover &reload=minutes");
+    return;
   }
+
+  root.innerHTML =
+    "<video id='bc' class='video-js full' " +
+    "data-account='" + account + "' " +
+    "data-player='" + bcPlayer + "' " +
+    "data-video-id='" + videoId + "' " +
+    "data-embed='default' " +
+    "playsinline autoplay muted preload='auto'></video>";
+
+  const bcUrl = "https://players.brightcove.net/" + account + "/" + bcPlayer + "_default/index.min.js";
+  loadScript(bcUrl, () => {
+    if (typeof videojs !== "function") {
+      showError("Brightcove loaded but videojs is unavailable.");
+      return;
+    }
+
+    const p = videojs("bc", {
+      autoplay: true,
+      muted: true,
+      controls: false,
+      liveui: true,
+      preload: "auto"
+    });
+
+    p.ready(function () {
+      const player = this;
+
+      player.on("loadedmetadata", function () {
+        try {
+          const tracks = player.remoteTextTracks();
+          if (tracks && tracks.length > 0) {
+            for (let i = 0; i < tracks.length; i++) {
+              if (tracks[i].kind === "captions" || tracks[i].kind === "subtitles") {
+                tracks[i].mode = "showing";
+                break;
+              }
+            }
+          }
+        } catch (e) {}
+      });
+
+      player.on("error", () => setTimeout(() => location.reload(), 3000));
+      player.on("stalled", () => setTimeout(() => location.reload(), 5000));
+    });
+  });
+}
+
+if (brightcove === "1" || brightcove === "true") {
+  startBrightcove();
+} else if (src) {
+  startClappr(src);
+} else {
+  showError(
+    "Missing parameters.\n\n" +
+    "Use either:\n" +
+    "  ?src=ENCODED_M3U8&fit=contain|cover&reload=minutes\n\n" +
+    "Or:\n" +
+    "  ?brightcove=1&account=...&player=...&video=...&fit=contain|cover&reload=minutes\n"
+  );
 }
 </script>
 
