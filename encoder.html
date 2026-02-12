@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Encoder Rev3</title>
+<title>Encoder Rev4</title>
 
 <style>
 html, body {
@@ -135,7 +135,7 @@ button.tiny {
 
 <body>
 <div class="wrap">
-  <h1>Wallboard URL Encoder Rev3</h1>
+  <h1>Wallboard URL Encoder Rev4</h1>
   <small>
     Paste an HLS .m3u8 URL (or any URL) and this page generates a ready-to-copy player.html link.
     Includes a decoder and a saved list of stream sources you can click to populate the encoder.
@@ -260,6 +260,7 @@ function build() {
   if (!src) return "Missing stream URL.";
 
   const params = new URLSearchParams();
+  params.set("ID", clean($("srcId").value) || "STREAM");
   params.set("src", src);
   params.set("fit", fit);
   params.set("muted", muted);
@@ -351,6 +352,7 @@ function renderStreamList() {
     load.textContent = "Load";
     load.addEventListener("click", () => {
       $("src").value = s.url;
+      $("srcId").value = s.name.replace(/\s+/g, "");
       $("out").value = build();
       window.scrollTo({ top: 0, behavior: "smooth" });
       $("src").focus();
@@ -366,6 +368,7 @@ function renderStreamList() {
     copyReady.textContent = "Copy ready";
     copyReady.addEventListener("click", () => {
       $("src").value = s.url;
+      $("srcId").value = s.name.replace(/\s+/g, "");
       const out = build();
       $("out").value = out;
       copyText(out);
@@ -379,6 +382,17 @@ function renderStreamList() {
     host.appendChild(div);
   });
 }
+
+const idLabel = document.createElement("label");
+idLabel.setAttribute("for", "srcId");
+idLabel.textContent = "Stream ID (used as ID= in the generated URL)";
+document.querySelector(".wrap label[for='src']").insertAdjacentElement("beforebegin", idLabel);
+
+const idInput = document.createElement("input");
+idInput.id = "srcId";
+idInput.type = "text";
+idInput.value = "STREAM";
+document.querySelector(".wrap label[for='src']").insertAdjacentElement("beforebegin", idInput);
 
 $("gen").addEventListener("click", () => { $("out").value = build(); });
 $("copy").addEventListener("click", () => copyText($("out").value));
@@ -399,6 +413,9 @@ $("fit").addEventListener("change", () => $("out").value = build());
 $("muted").addEventListener("change", () => $("out").value = build());
 $("reload").addEventListener("input", () => $("out").value = build());
 $("base").addEventListener("input", () => $("out").value = build());
+document.addEventListener("input", (e) => {
+  if (e.target && e.target.id === "srcId") $("out").value = build();
+});
 
 $("fullUrl").addEventListener("input", decodeFullUrl);
 
