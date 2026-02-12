@@ -1,0 +1,198 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Encoder Rev1</title>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  font: 14px Arial, sans-serif;
+  background: #0b0b0b;
+  color: #f2f2f2;
+}
+
+.wrap {
+  max-width: 980px;
+  margin: 18px auto;
+  padding: 16px;
+}
+
+h1, h2 {
+  margin: 0 0 10px 0;
+  font-weight: 600;
+}
+
+label {
+  display: block;
+  margin: 10px 0 6px 0;
+}
+
+input[type="text"], textarea, select {
+  width: 100%;
+  box-sizing: border-box;
+  background: #111;
+  color: #f2f2f2;
+  border: 1px solid #333;
+  padding: 10px;
+  border-radius: 6px;
+  outline: none;
+}
+
+textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.btns {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+button {
+  background: #1f6feb;
+  color: #fff;
+  border: 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #333;
+}
+
+small {
+  color: #b7b7b7;
+}
+
+.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+  <h1>Wallboard URL Encoder Rev1</h1>
+  <small>
+    Paste an HLS .m3u8 URL (or any URL) and this page will generate a ready-to-copy
+    player.html link with the stream URL properly encoded.
+  </small>
+
+  <label for="base">Player base URL (edit if your file name/path changes)</label>
+  <input id="base" type="text" value="https://solutionssquad.github.io/shulboard/player.html" />
+
+  <label for="src">Stream URL to encode</label>
+  <textarea id="src" placeholder="https://example.com/live/master.m3u8"></textarea>
+
+  <div class="row">
+    <div>
+      <label for="fit">fit</label>
+      <select id="fit">
+        <option value="contain" selected>contain (no crop, may show bars)</option>
+        <option value="cover">cover (crop-fill, no bars)</option>
+      </select>
+    </div>
+    <div>
+      <label for="muted">muted</label>
+      <select id="muted">
+        <option value="1" selected>1 (recommended)</option>
+        <option value="0">0</option>
+      </select>
+    </div>
+  </div>
+
+  <label for="reload">reload (minutes, 0 disables)</label>
+  <input id="reload" type="text" value="60" />
+
+  <div class="btns">
+    <button id="gen">Generate</button>
+    <button class="secondary" id="copy">Copy output</button>
+    <button class="secondary" id="clear">Clear</button>
+  </div>
+
+  <label for="out">Ready-to-use URL (copy/paste into wallboard URLS map)</label>
+  <textarea id="out" class="code" readonly></textarea>
+
+  <small>
+    Tip: You can paste the output directly into your wallboard URL map, for example:
+    <span class="code">URL7: "&lt;output&gt;"</span>
+  </small>
+</div>
+
+<script>
+function $(id) { return document.getElementById(id); }
+
+function clean(s) {
+  return (s || "").trim().replace(/\s+/g, "");
+}
+
+function build() {
+  const base = clean($("base").value);
+  const src = clean($("src").value);
+  const fit = $("fit").value;
+  const muted = $("muted").value;
+  const reload = clean($("reload").value) || "0";
+
+  if (!base) return "Missing player base URL.";
+  if (!src) return "Missing stream URL.";
+
+  const enc = encodeURIComponent(src);
+  const params = new URLSearchParams();
+  params.set("src", enc);
+  params.set("fit", fit);
+  params.set("muted", muted);
+
+  const r = parseInt(reload, 10);
+  if (!isNaN(r) && r > 0) params.set("reload", String(r));
+
+  return base + "?" + params.toString();
+}
+
+$("gen").addEventListener("click", () => {
+  $("out").value = build();
+});
+
+$("copy").addEventListener("click", async () => {
+  const v = $("out").value;
+  if (!v) return;
+  try {
+    await navigator.clipboard.writeText(v);
+  } catch (e) {
+    $("out").focus();
+    $("out").select();
+    document.execCommand("copy");
+  }
+});
+
+$("clear").addEventListener("click", () => {
+  $("src").value = "";
+  $("out").value = "";
+  $("src").focus();
+});
+
+// Auto-generate on paste/typing
+$("src").addEventListener("input", () => {
+  const s = clean($("src").value);
+  if (s.length > 8) $("out").value = build();
+});
+$("fit").addEventListener("change", () => $("out").value = build());
+$("muted").addEventListener("change", () => $("out").value = build());
+$("reload").addEventListener("input", () => $("out").value = build());
+$("base").addEventListener("input", () => $("out").value = build());
+</script>
+
+</body>
+</html>
