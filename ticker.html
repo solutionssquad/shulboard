@@ -1,45 +1,136 @@
-<body bgcolor="black">
-  <!-- TradingView Widget BEGIN -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Ticker Rev3</title>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+.tradingview-widget-container {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #000;
+}
+
+.tradingview-widget-container__widget {
+  width: 100%;
+  height: 100%;
+}
+</style>
+
+<!--
+TRADINGVIEW TICKER TAPE
+=======================
+
+Official documentation and symbol search:
+https://www.tradingview.com/widget/ticker-tape/
+https://www.tradingview.com/symbols/
+
+You can search any tradable symbol at:
+https://www.tradingview.com/symbols/EXCHANGE-SYMBOL/
+
+Example:
+https://www.tradingview.com/symbols/NASDAQ-AAPL/
+https://www.tradingview.com/symbols/BITSTAMP-BTCUSD/
+
+-----------------------------------
+SYMBOL FORMAT
+-----------------------------------
+
+Each symbol object supports:
+
+{
+  "proName": "EXCHANGE:SYMBOL",
+  "title": "Custom Label (optional)",
+  "description": "Optional description (rarely used)"
+}
+
+Examples:
+  "BITSTAMP:BTCUSD"
+  "NASDAQ:AAPL"
+  "NYSE:TSLA"
+  "FOREXCOM:EURUSD"
+  "CAPITALCOM:GOLD"
+
+-----------------------------------
+ALL AVAILABLE PARAMETERS
+-----------------------------------
+
+"symbols": [ ... ]
+  Array of symbol objects to display.
+
+"showSymbolLogo": true | false
+  Shows exchange / asset logos if available.
+
+"isTransparent": true | false
+  true  = background inherits parent
+  false = solid widget background
+
+"displayMode": "regular" | "compact" | "adaptive"
+  regular  = larger spacing
+  compact  = tight layout
+  adaptive = adjusts to screen width
+
+"colorTheme": "light" | "dark"
+
+"locale": string
+  Examples:
+    "en"
+    "en_US"
+    "en_GB"
+    "fr"
+    "de"
+    "es"
+    "it"
+    "ja"
+    "zh_CN"
+
+-----------------------------------
+NOTES
+-----------------------------------
+
+• Widget requires:
+  https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js
+
+• Prices auto-refresh.
+• Height is controlled by container.
+• Safe inside iframe.
+-->
+
+</head>
+
+<body>
 <div class="tradingview-widget-container">
   <div class="tradingview-widget-container__widget"></div>
-  <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js" async>
+
+  <script src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js" async>
   {
-  "symbols": [
-    {
-      "proName": "BITSTAMP:BTCUSD",
-      "title": "Bitcoin"
-    },
-    {
-      "proName": "BITSTAMP:ETHUSD",
-      "title": "Ethereum"
-    }, 
-    {
-      "description": "",
-      "proName": "NASDAQ:NVDA"
-    },
-    {
-      "description": "",
-      "proName": "NASDAQ:AMZN"
-    },
-    {
-      "description": "",
-      "proName": "NASDAQ:MSFT"
-    },
-    {
-      "description": "",
-      "proName": "NASDAQ:AAPL"
-    },
-    {
-      "description": "",
-      "proName": "CAPITALCOM:GOLD"
-    }   
-      ],
-  "showSymbolLogo": true,
-  "isTransparent": true,
-  "displayMode": "compact",
-  "colorTheme": "dark",
-  "locale": "en"
-}
+    "symbols": [
+      { "proName": "BITSTAMP:BTCUSD", "title": "Bitcoin" },
+      { "proName": "BITSTAMP:ETHUSD", "title": "Ethereum" },
+      { "proName": "NASDAQ:NVDA" },
+      { "proName": "NASDAQ:AMZN" },
+      { "proName": "NASDAQ:MSFT" },
+      { "proName": "NASDAQ:AAPL" },
+      { "proName": "CAPITALCOM:GOLD" }
+    ],
+    "showSymbolLogo": true,
+    "isTransparent": true,
+    "displayMode": "adaptive",
+    "colorTheme": "dark",
+    "locale": "en"
+  }
   </script>
 </div>
-<!-- adaptive - compact  TradingView Widget END -->
+</body>
+</html>
