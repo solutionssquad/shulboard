@@ -1,10 +1,65 @@
+<!doctype html>
+<html>
 <head>
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/clappr/clappr@latest/dist/clappr.min.js"></script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>IL24 Rev1</title>
+
+<script src="https://cdn.jsdelivr.net/gh/clappr/clappr@latest/dist/clappr.min.js"></script>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+#player {
+  position: fixed;
+  inset: 0;
+  background: #000;
+}
+
+#player .clappr-player,
+#player .container,
+#player .player,
+#player .media,
+#player video {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+#player video {
+  object-fit: contain !important; /* change to cover if you want to crop instead of bars */
+  background: #000;
+}
+
+#player .media-control,
+#player .spinner {
+  display: none !important;
+}
+</style>
 </head>
-<body bgcolor="#000000">
-  <div id="player" style="display: block; width: 100%; height: 100%;"></div>
-  <script>
-    var player = new Clappr.Player({source: "https://bcovlive-a.akamaihd.net/ecf224f43f3b43e69471a7b626481af0/eu-central-1/5377161796001/playlist.m3u8", width: "100%", height: "100%",  mute: true, loop: true, chromeless: true, autoPlay: true, parentId: "#player"});
-  </script>
-  </body>
-<!---https://bcovlive-a.akamaihd.net/6e3dd61ac4c34d6f8fb9698b565b9f50/eu-central-1/5377161796001/556d51d2f08440b3a4b6442b43008aa0/playlist-all_dvr_ssaiM.m3u8----->
+
+<body>
+<div id="player"></div>
+
+<script>
+var player = new Clappr.Player({
+  source: "https://fastly.live.brightcove.com/6386790908112/eu-central-1/5377161796001/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJob3N0IjoiZXJmjYzLmVncmVzcy53YzQ3bTEiLCJhY2NvdW50X2lkIjoiNTM3NzE2MTc5NjAwMSIsImVobiI6ImZhc3RseS5saXZlLmJyaWdodGNvdmUuY29tIiwiaXNzIjoiYmxpdmUtcGxheWJhY2stc291cmNlLWFwaSIsInN1YiI6InBhdGhtYXB0b2tlbiIsImF1ZCI6WyI1Mzc3MTYxNzk2MDAxIl0sImp0aSI6IjYzODY3OTA5MDgxMTIifQ._w5c3EwfnEecDCEpDaKuVz07uuEyUb3vXvQN3svv-oU/chunklist.m3u8",
+  parentId: "#player",
+  autoPlay: true,
+  mute: true,
+  chromeless: true,
+  loop: true,
+  width: "100%",
+  height: "100%",
+  playback: { playInline: true }
+});
+</script>
+
+</body>
+</html>
