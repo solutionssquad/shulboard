@@ -1,0 +1,283 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Headlines Rev1</title>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+  font-family: Arial, sans-serif;
+}
+
+.bar {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  background: #000;
+  color: #fff;
+}
+
+.label {
+  flex: 0 0 auto;
+  padding: 0 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  font-size: 14px;
+  color: #fff;
+  border-right: 1px solid #222;
+}
+
+.track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 100%;
+  overflow: hidden;
+}
+
+.marquee {
+  position: absolute;
+  white-space: nowrap;
+  will-change: transform;
+  font-size: 14px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 26px;
+  padding-left: 100%;
+}
+
+.item {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #eaeaea;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #1f6feb;
+  flex: 0 0 auto;
+}
+
+.source {
+  color: #9aa4b2;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.title {
+  color: #f2f2f2;
+  font-weight: 600;
+}
+
+.status {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  padding: 0 12px;
+  color: #b7b7b7;
+  font-size: 13px;
+}
+
+a { color: inherit; text-decoration: none; }
+</style>
+</head>
+
+<body>
+<div class="bar">
+  <div class="label">HEADLINES</div>
+
+  <div class="track">
+    <div id="status" class="status">Loading headlines...</div>
+    <div id="marquee" class="marquee"></div>
+  </div>
+</div>
+
+<script>
+/*
+HEADLINES TICKER (Top 5) for a wide horizontal row
+
+How it works:
+- Fetches RSS feeds
+- Uses a simple public CORS proxy (AllOrigins) to avoid cross-origin blocks
+- Parses RSS XML and builds a scrolling ticker
+
+Edit these:
+- FEEDS: list of RSS feeds
+- MAX_ITEMS: number of headlines to show
+- SCROLL_PX_PER_SEC: speed
+- REFRESH_MINUTES: re-fetch interval
+
+Notes:
+- If a feed is down, it will be skipped.
+- Headlines are clickable (opens in the iframe page if clicked).
+*/
+
+const FEEDS = [
+  { name: "BBC", url: "https://feeds.bbci.co.uk/news/rss.xml" },
+  { name: "Reuters", url: "https://feeds.reuters.com/reuters/topNews" },
+  { name: "AP", url: "https://apnews.com/hub/ap-top-news?output=rss" },
+  { name: "NPR", url: "https://feeds.npr.org/1001/rss.xml" }
+];
+
+const MAX_ITEMS = 5;
+const SCROLL_PX_PER_SEC = 90;
+const REFRESH_MINUTES = 10;
+
+const statusEl = document.getElementById("status");
+const marqueeEl = document.getElementById("marquee");
+
+function showStatus(msg) {
+  statusEl.style.display = "flex";
+  statusEl.textContent = msg;
+}
+
+function hideStatus() {
+  statusEl.style.display = "none";
+}
+
+function proxy(url) {
+  // AllOrigins raw endpoint returns the upstream response body
+  // If AllOrigins ever changes, swap this for another proxy or host your own.
+  return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
+}
+
+function parseRss(xmlText) {
+  const doc = new DOMParser().parseFromString(xmlText, "text/xml");
+  const items = Array.from(doc.querySelectorAll("item")).slice(0, 10);
+  return items.map((it) => ({
+    title: (it.querySelector("title")?.textContent || "").trim(),
+    link: (it.querySelector("link")?.textContent || "").trim(),
+    pubDate: (it.querySelector("pubDate")?.textContent || "").trim()
+  })).filter(x => x.title && x.link);
+}
+
+async function fetchFeed(feed) {
+  const res = await fetch(proxy(feed.url), { cache: "no-store" });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const text = await res.text();
+  return parseRss(text).map(x => ({ ...x, source: feed.name }));
+}
+
+function dedupeByTitle(list) {
+  const seen = new Set();
+  const out = [];
+  for (const x of list) {
+    const key = x.title.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(x);
+  }
+  return out;
+}
+
+function buildMarquee(items) {
+  marqueeEl.innerHTML = "";
+
+  if (!items.length) {
+    showStatus("No headlines available");
+    return;
+  }
+  hideStatus();
+
+  for (const h of items) {
+    const span = document.createElement("span");
+    span.className = "item";
+
+    const dot = document.createElement("span");
+    dot.className = "dot";
+
+    const src = document.createElement("span");
+    src.className = "source";
+    src.textContent = h.source;
+
+    const a = document.createElement("a");
+    a.href = h.link;
+    a.target = "_self";
+
+    const title = document.createElement("span");
+    title.className = "title";
+    title.textContent = h.title;
+
+    a.appendChild(title);
+    span.appendChild(dot);
+    span.appendChild(src);
+    span.appendChild(a);
+    marqueeEl.appendChild(span);
+  }
+
+  // Duplicate content so the loop is seamless
+  const clone = marqueeEl.cloneNode(true);
+  clone.id = "";
+  marqueeEl.appendChild(clone);
+}
+
+let animId = null;
+let x = 0;
+let lastTs = null;
+
+function startScroll() {
+  cancelAnimationFrame(animId);
+  x = 0;
+  lastTs = null;
+
+  function step(ts) {
+    if (lastTs == null) lastTs = ts;
+    const dt = (ts - lastTs) / 1000;
+    lastTs = ts;
+
+    x -= SCROLL_PX_PER_SEC * dt;
+
+    const contentWidth = marqueeEl.scrollWidth / 2;
+    if (contentWidth > 0 && Math.abs(x) >= contentWidth) x = 0;
+
+    marqueeEl.style.transform = "translateX(" + x + "px)";
+    animId = requestAnimationFrame(step);
+  }
+
+  animId = requestAnimationFrame(step);
+}
+
+async function refresh() {
+  showStatus("Loading headlines...");
+  try {
+    const results = await Promise.allSettled(FEEDS.map(fetchFeed));
+    let items = [];
+    for (const r of results) {
+      if (r.status === "fulfilled") items = items.concat(r.value);
+    }
+
+    items = dedupeByTitle(items);
+
+    // Prefer newest if pubDate exists, otherwise keep order
+    items.sort((a, b) => {
+      const ta = Date.parse(a.pubDate) || 0;
+      const tb = Date.parse(b.pubDate) || 0;
+      return tb - ta;
+    });
+
+    items = items.slice(0, MAX_ITEMS);
+
+    buildMarquee(items);
+    startScroll();
+  } catch (e) {
+    showStatus("Failed to load headlines");
+  }
+}
+
+refresh();
+setInterval(refresh, REFRESH_MINUTES * 60 * 1000);
+</script>
+</body>
+</html>
