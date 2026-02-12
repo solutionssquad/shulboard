@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Universal Player Rev1</title>
+
+<script src="https://cdn.jsdelivr.net/gh/clappr/clappr@latest/dist/clappr.min.js"></script>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+#player {
+  position: fixed;
+  inset: 0;
+  background: #000;
+}
+
+#player .clappr-player,
+#player .container,
+#player .player,
+#player .media,
+#player video {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+#player video {
+  object-fit: contain !important; /* change to cover if you prefer crop-fill */
+  background: #000;
+}
+
+#player .media-control,
+#player .spinner {
+  display: none !important;
+}
+</style>
+</head>
+
+<body>
+<div id="player"></div>
+
+<script>
+function getParam(name) {
+  const u = new URL(window.location.href);
+  return u.searchParams.get(name);
+}
+
+const src = getParam("src");
+if (!src) {
+  document.body.innerHTML = "<div style='color:#fff;font:16px Arial;padding:12px'>Missing ?src= (URL-encoded m3u8)</div>";
+} else {
+  const fit = (getParam("fit") || "contain").toLowerCase();
+  if (fit === "cover") {
+    document.documentElement.style.setProperty("--fit", "cover");
+    const style = document.createElement("style");
+    style.textContent = "#player video{object-fit:cover!important}";
+    document.head.appendChild(style);
+  }
+
+  var player = new Clappr.Player({
+    source: src,
+    parentId: "#player",
+    autoPlay: true,
+    mute: true,
+    chromeless: true,
+    loop: true,
+    width: "100%",
+    height: "100%",
+    playback: { playInline: true }
+  });
+
+  // Optional self-heal: reload if playback stalls
+  const RELOAD_MINUTES = parseInt(getParam("reload") || "0", 10);
+  if (RELOAD_MINUTES > 0) {
+    setTimeout(() => location.reload(), RELOAD_MINUTES * 60 * 1000);
+  }
+}
+</script>
+
+</body>
+</html>
