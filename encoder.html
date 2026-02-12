@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Encoder Rev1</title>
+<title>Encoder Rev2</title>
 
 <style>
 html, body {
@@ -15,19 +15,23 @@ html, body {
 }
 
 .wrap {
-  max-width: 980px;
-  margin: 18px auto;
-  padding: 16px;
+  max-width: 1000px;
+  margin: 20px auto;
+  padding: 18px;
 }
 
-h1, h2 {
-  margin: 0 0 10px 0;
+h1 {
+  margin: 0 0 12px 0;
   font-weight: 600;
+}
+
+small {
+  color: #b7b7b7;
 }
 
 label {
   display: block;
-  margin: 10px 0 6px 0;
+  margin: 14px 0 6px 0;
 }
 
 input[type="text"], textarea, select {
@@ -55,7 +59,7 @@ textarea {
 .btns {
   display: flex;
   gap: 10px;
-  margin-top: 12px;
+  margin-top: 14px;
   flex-wrap: wrap;
 }
 
@@ -63,7 +67,7 @@ button {
   background: #1f6feb;
   color: #fff;
   border: 0;
-  padding: 10px 12px;
+  padding: 10px 14px;
   border-radius: 6px;
   cursor: pointer;
 }
@@ -72,12 +76,8 @@ button.secondary {
   background: #333;
 }
 
-small {
-  color: #b7b7b7;
-}
-
 .code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 13px;
 }
 </style>
@@ -85,58 +85,63 @@ small {
 
 <body>
 <div class="wrap">
-  <h1>Wallboard URL Encoder Rev1</h1>
-  <small>
-    Paste an HLS .m3u8 URL (or any URL) and this page will generate a ready-to-copy
-    player.html link with the stream URL properly encoded.
-  </small>
 
-  <label for="base">Player base URL (edit if your file name/path changes)</label>
-  <input id="base" type="text" value="https://solutionssquad.github.io/shulboard/player.html" />
+<h1>Wallboard URL Encoder Rev2</h1>
 
-  <label for="src">Stream URL to encode</label>
-  <textarea id="src" placeholder="https://example.com/live/master.m3u8"></textarea>
+<small>
+Paste a stream URL below. This page generates a fully ready-to-use
+player.html link with proper encoding (single encode only).
+No double encoding.
+</small>
 
-  <div class="row">
-    <div>
-      <label for="fit">fit</label>
-      <select id="fit">
-        <option value="contain" selected>contain (no crop, may show bars)</option>
-        <option value="cover">cover (crop-fill, no bars)</option>
-      </select>
-    </div>
-    <div>
-      <label for="muted">muted</label>
-      <select id="muted">
-        <option value="1" selected>1 (recommended)</option>
-        <option value="0">0</option>
-      </select>
-    </div>
+<label for="base">Player base URL</label>
+<input id="base" type="text"
+value="https://solutionssquad.github.io/shulboard/player.html" />
+
+<label for="src">Stream URL (.m3u8 or other)</label>
+<textarea id="src" placeholder="https://example.com/live/master.m3u8"></textarea>
+
+<div class="row">
+  <div>
+    <label for="fit">fit</label>
+    <select id="fit">
+      <option value="contain" selected>contain (no crop, may show bars)</option>
+      <option value="cover">cover (crop-fill, no bars)</option>
+    </select>
   </div>
-
-  <label for="reload">reload (minutes, 0 disables)</label>
-  <input id="reload" type="text" value="60" />
-
-  <div class="btns">
-    <button id="gen">Generate</button>
-    <button class="secondary" id="copy">Copy output</button>
-    <button class="secondary" id="clear">Clear</button>
+  <div>
+    <label for="muted">muted</label>
+    <select id="muted">
+      <option value="1" selected>1 (recommended)</option>
+      <option value="0">0</option>
+    </select>
   </div>
+</div>
 
-  <label for="out">Ready-to-use URL (copy/paste into wallboard URLS map)</label>
-  <textarea id="out" class="code" readonly></textarea>
+<label for="reload">reload (minutes, 0 disables)</label>
+<input id="reload" type="text" value="60" />
 
-  <small>
-    Tip: You can paste the output directly into your wallboard URL map, for example:
-    <span class="code">URL7: "&lt;output&gt;"</span>
-  </small>
+<div class="btns">
+  <button id="gen">Generate</button>
+  <button class="secondary" id="copy">Copy Output</button>
+  <button class="secondary" id="clear">Clear</button>
+</div>
+
+<label for="out">Ready-to-use URL (copy into wallboard URLS map)</label>
+<textarea id="out" class="code" readonly></textarea>
+
+<small>
+If the output contains %253A or %252F, something is wrong.
+Correct encoding contains %3A and %2F only.
+</small>
+
 </div>
 
 <script>
 function $(id) { return document.getElementById(id); }
 
 function clean(s) {
-  return (s || "").trim().replace(/\s+/g, "");
+  return (s || "").trim();
 }
 
 function build() {
@@ -149,14 +154,17 @@ function build() {
   if (!base) return "Missing player base URL.";
   if (!src) return "Missing stream URL.";
 
-  const enc = encodeURIComponent(src);
+  // IMPORTANT: DO NOT manually encode src.
+  // URLSearchParams handles encoding exactly once.
   const params = new URLSearchParams();
-  params.set("src", enc);
+  params.set("src", src);
   params.set("fit", fit);
   params.set("muted", muted);
 
   const r = parseInt(reload, 10);
-  if (!isNaN(r) && r > 0) params.set("reload", String(r));
+  if (!isNaN(r) && r > 0) {
+    params.set("reload", String(r));
+  }
 
   return base + "?" + params.toString();
 }
@@ -166,10 +174,11 @@ $("gen").addEventListener("click", () => {
 });
 
 $("copy").addEventListener("click", async () => {
-  const v = $("out").value;
-  if (!v) return;
+  const value = $("out").value;
+  if (!value) return;
+
   try {
-    await navigator.clipboard.writeText(v);
+    await navigator.clipboard.writeText(value);
   } catch (e) {
     $("out").focus();
     $("out").select();
@@ -183,10 +192,11 @@ $("clear").addEventListener("click", () => {
   $("src").focus();
 });
 
-// Auto-generate on paste/typing
+// Auto-generate as you type
 $("src").addEventListener("input", () => {
-  const s = clean($("src").value);
-  if (s.length > 8) $("out").value = build();
+  if ($("src").value.trim().length > 8) {
+    $("out").value = build();
+  }
 });
 $("fit").addEventListener("change", () => $("out").value = build());
 $("muted").addEventListener("change", () => $("out").value = build());
