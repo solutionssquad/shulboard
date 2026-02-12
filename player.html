@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Universal Player Rev1</title>
+<title>Universal Player Rev2</title>
 
 <script src="https://cdn.jsdelivr.net/gh/clappr/clappr@latest/dist/clappr.min.js"></script>
 
@@ -33,9 +33,9 @@ html, body {
   height: 100% !important;
 }
 
-/* No zoom, no distortion */
+/* Default: no zoom, no distortion (use fit=cover to crop-fill) */
 #player video {
-  object-fit: contain !important; /* change to cover if you prefer crop-fill */
+  object-fit: contain !important;
   background: #000;
 }
 
@@ -51,14 +51,37 @@ html, body {
 <div id="player"></div>
 
 <script>
+/*
+Universal Player Rev2 (Clappr)
+
+Query parameters:
+- src=...            (required) HLS .m3u8 URL. URL-encode it for reliability.
+- fit=contain|cover  (optional) contain = no crop (default), cover = crop-fill (no bars).
+- reload=MINUTES     (optional) reload page every N minutes (0 or missing disables).
+
+Examples:
+
+1) Basic (encoded):
+player.html?src=https%3A%2F%2Fabcnews-streams.akamaized.net%2Fhls%2Flive%2F2023566%2Fabcnewshudson7%2Fmaster.m3u8
+
+2) Crop-fill (removes bars, may crop edges):
+player.html?src=https%3A%2F%2Flinear417-gb-hls1-prd-ak.cdn.skycdp.com%2F100e%2FContent%2FHLS_001_1080_30%2FLive%2Fchannel(skynews)%2Findex_1080-30.m3u8&fit=cover
+
+3) Periodic self-heal (reload every 60 minutes):
+player.html?src=https%3A%2F%2Fd2xg1g9o5vns8m.cloudfront.net%2Fout%2Fv1%2F66d4ac8748ce4a9298b4e40e48d1ae2f%2Findex.m3u8&reload=60
+
+4) Both options:
+player.html?src=https%3A%2F%2Fliveprodusphoenixeast.akamaized.net%2FUSPhx-HD%2FChannel-TX-USPhx-AWS-virginia-1%2FSource-USPhx-16k-1-s6lk2-BP-07-02-81ykIWnsMsg_live.m3u8&fit=contain&reload=30
+*/
+
 function getParam(name) {
-  const u = new URL(window.location.href);
-  return u.searchParams.get(name);
+  return new URL(window.location.href).searchParams.get(name);
 }
 
 const src = getParam("src");
 if (!src) {
-  document.body.innerHTML = "<div style='color:#fff;font:16px Arial;padding:12px'>Missing ?src= (URL-encoded m3u8)</div>";
+  document.body.innerHTML =
+    "<div style='color:#fff;font:16px Arial;padding:12px'>Missing ?src= (URL-encoded m3u8)</div>";
 } else {
   const fit = (getParam("fit") || "contain").toLowerCase();
   if (fit === "cover") {
@@ -66,6 +89,19 @@ if (!src) {
     style.textContent = "#player video{object-fit:cover!important}";
     document.head.appendChild(style);
   }
+
+  /*
+  Performance notes:
+  - The biggest wins come from stream choices, not code:
+    - Prefer lower bitrate renditions (720p or 480p) for multi-tile wallboards.
+    - Avoid 1080p@60fps feeds when tiles are small.
+  - Chrome:
+    - Use hardware acceleration (on) and keep Windows display scaling at 100%.
+    - Consider launching Chrome with a single shared user-data-dir for kiosk stability.
+  - This page:
+    - chromeless=true reduces UI work.
+    - muted=true helps autoplay.
+  */
 
   new Clappr.Player({
     source: src,
