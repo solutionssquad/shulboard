@@ -2,12 +2,13 @@
 Live Flights Kiosk Map (map-only, single HTML)
 =============================================
 
-Updates in this version
-- Status overlay changed to a single, thin bar across the bottom (less in the way).
-- Flight info boxes reduced by about 20 percent (box size and fonts).
-- Added an easy-to-find SETTINGS block at the top of the script.
-- Added a single setting to control stale aircraft timeout: STALE_AIRCRAFT_MS.
-- Status bar now includes last error in a compact way.
+Night radar preset (visual-only changes)
+- Dark basemap attribution fixed
+- Radar tint overlay on top of tiles
+- Stronger neon trails + glow
+- Plane icons get a subtle glow
+- Labels retuned for "airport geek" night mode
+- Removed DIST from the flight info box (visual only)
 
 -->
 
@@ -32,16 +33,21 @@ Updates in this version
 
   <style>
     :root{
-      --bg: #070b10;
+      --bg: #05070b;
 
-      --text: #e7eef7;
-      --muted: rgba(255,255,255,0.72);
+      --text: #d9f2ff;
+      --muted: rgba(190,235,255,0.68);
 
-      --climb: #3cff97;
+      /* neon radar palette */
+      --climb: #32ff9a;
       --level: #6bd3ff;
       --desc:  #ff4f66;
 
-      --accent: #6bd3ff;
+      --accent: #7ae7ff;
+
+      /* radar tint overlay */
+      --radarTint: rgba(20, 255, 210, 0.08);
+      --radarVignette: rgba(0,0,0,0.55);
 
       --font: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
@@ -59,6 +65,27 @@ Updates in this version
     #map {
       width: 100vw;
       height: 100vh;
+      position: relative;
+      isolation: isolate;
+    }
+
+    /* Slightly mute tiles to feel like a scope */
+    .leaflet-tile {
+      filter: saturate(0.75) brightness(0.72) contrast(1.06);
+    }
+
+    /* Radar overlay: tint + vignette (no functional impact) */
+    #map::after{
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 550;
+      background:
+        radial-gradient(circle at 50% 55%, rgba(0,0,0,0) 35%, var(--radarVignette) 78%),
+        linear-gradient(180deg, rgba(0,0,0,0.28), rgba(0,0,0,0.20)),
+        var(--radarTint);
+      mix-blend-mode: screen;
     }
 
     .leaflet-control-attribution {
@@ -74,13 +101,16 @@ Updates in this version
       border: 1px solid rgba(255,255,255,0.14) !important;
     }
 
-    /* Flight info tag (about 20 percent smaller) */
+    /* Flight info tag */
     .ac-tag {
-      background: rgba(10, 14, 18, 0.86);
-      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(6, 12, 16, 0.86);
+      border: 1px solid rgba(122, 231, 255, 0.18);
       border-radius: 12px;
       padding: 8px 10px;
-      box-shadow: 0 14px 28px rgba(0,0,0,0.46);
+      box-shadow:
+        0 14px 28px rgba(0,0,0,0.50),
+        0 0 0 1px rgba(50,255,154,0.06),
+        0 0 18px rgba(107,211,255,0.10);
       backdrop-filter: blur(7px);
 
       min-width: 165px;
@@ -100,6 +130,7 @@ Updates in this version
       font-size: 14px;
       letter-spacing: 0.2px;
       color: var(--accent);
+      text-shadow: 0 0 12px rgba(122,231,255,0.18);
     }
 
     .ac-pill {
@@ -109,7 +140,7 @@ Updates in this version
       font-size: 10px;
       font-weight: 900;
       font-family: var(--mono);
-      border: 1px solid rgba(255,255,255,0.16);
+      border: 1px solid rgba(255,255,255,0.14);
       transform: translateY(1px);
       white-space: nowrap;
     }
@@ -120,7 +151,7 @@ Updates in this version
     .ac-airline {
       margin-top: 5px;
       font-size: 11px;
-      color: rgba(255,255,255,0.90);
+      color: rgba(220,250,255,0.92);
     }
 
     .ac-route {
@@ -140,11 +171,11 @@ Updates in this version
 
       font-family: var(--mono);
       font-size: 11px;
-      color: rgba(255,255,255,0.92);
+      color: rgba(220,250,255,0.92);
     }
 
     .ac-k {
-      color: rgba(255,255,255,0.70);
+      color: rgba(190,235,255,0.62);
       font-weight: 900;
       letter-spacing: 0.45px;
       font-size: 10px;
@@ -153,21 +184,23 @@ Updates in this version
     .ac-type {
       margin-top: 7px;
       font-size: 10px;
-      color: rgba(255,255,255,0.76);
+      color: rgba(190,235,255,0.72);
     }
 
     .ac-hex {
       margin-top: 5px;
       font-family: var(--mono);
       font-size: 9px;
-      color: rgba(255,255,255,0.55);
+      color: rgba(190,235,255,0.52);
     }
 
     .plane-icon {
       width: 26px;
       height: 26px;
       transform-origin: 50% 50%;
-      filter: drop-shadow(0 8px 10px rgba(0,0,0,0.35));
+      filter:
+        drop-shadow(0 10px 14px rgba(0,0,0,0.45))
+        drop-shadow(0 0 10px rgba(107,211,255,0.14));
     }
 
     /* Custom label overlay that we clamp to the viewport */
@@ -189,17 +222,17 @@ Updates in this version
       bottom: 0;
       z-index: 9999;
 
-      background: rgba(0,0,0,0.70);
-      border-top: 1px solid rgba(255,255,255,0.16);
+      background: rgba(0,0,0,0.58);
+      border-top: 1px solid rgba(122, 231, 255, 0.16);
       padding: 6px 10px;
 
       font-family: var(--mono);
       font-size: 12px;
       line-height: 1.15;
-      color: rgba(255,255,255,0.88);
+      color: rgba(220,250,255,0.86);
 
       pointer-events: none;
-      backdrop-filter: blur(6px);
+      backdrop-filter: blur(8px);
 
       display: flex;
       gap: 14px;
@@ -207,16 +240,25 @@ Updates in this version
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+
+      box-shadow: 0 -12px 26px rgba(0,0,0,0.35);
     }
 
-    #statusBar .k { color: rgba(255,255,255,0.62); }
-    #statusBar .ok { color: var(--climb); font-weight: 800; }
+    #statusBar .k { color: rgba(190,235,255,0.58); }
+    #statusBar .ok { color: var(--climb); font-weight: 800; text-shadow: 0 0 10px rgba(50,255,154,0.14); }
     #statusBar .warn { color: #ffd36b; font-weight: 800; }
     #statusBar .bad { color: var(--desc); font-weight: 800; }
 
     #statusBar .spacer {
       flex: 1 1 auto;
       min-width: 10px;
+    }
+
+    /* Make the trail pop */
+    .leaflet-overlay-pane svg path {
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 6px rgba(107,211,255,0.14));
     }
   </style>
 </head>
@@ -253,8 +295,8 @@ Updates in this version
     const SEARCH_RADIUS_NM = 2.5;
 
     // Update loop
-    const UPDATE_MS = 2000;
-    const FETCH_TIMEOUT_MS = 2000;
+    const UPDATE_MS = 1000;
+    const FETCH_TIMEOUT_MS = 1000;
 
     // Remove aircraft if not seen for this long (stale timeout)
     const STALE_AIRCRAFT_MS = 60_000;
@@ -270,7 +312,7 @@ Updates in this version
     const DESC_FPM_THRESHOLD  = -500;
 
     // Only show the flight info box if the plane is airborne
-    const AIRBORNE_MIN_FT = 200;
+    const AIRBORNE_MIN_FT = 50;
 
     // Keep labels on-screen with a safe margin
     const LABEL_SCREEN_PADDING_PX = 12;
@@ -470,25 +512,31 @@ Updates in this version
      **************************************************************/
     const map = L.map("map", { zoomControl: true });
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
       maxZoom: 19,
-      attribution: "&copy; OpenStreetMap contributors"
+      attribution: "&copy; OpenStreetMap &copy; CARTO"
     }).addTo(map);
 
     map.setView([MAP_CENTER_LAT, MAP_CENTER_LON], MAP_ZOOM);
 
+    /* Radar ring (keep same geometry, but more scope-like styling) */
     L.circle([FETCH_LAT, FETCH_LON], {
       radius: SEARCH_RADIUS_NM * NM_TO_METERS,
       weight: 1,
       opacity: 0.55,
-      fillOpacity: 0.03
+      color: "rgba(122,231,255,0.45)",
+      fillOpacity: 0.03,
+      fillColor: "rgba(50,255,154,0.08)"
     }).addTo(map);
 
+    /* Center point */
     L.circleMarker([FETCH_LAT, FETCH_LON], {
       radius: 6,
       weight: 2,
       opacity: 1,
-      fillOpacity: 0.85
+      color: "rgba(122,231,255,0.7)",
+      fillOpacity: 0.9,
+      fillColor: "rgba(50,255,154,0.65)"
     }).addTo(map);
 
     // Label layer container (inside map overlay pane)
@@ -679,7 +727,6 @@ Updates in this version
       const alt = fmtAltFeet(aircraftAltMeters(ac));
       const spd = fmtSpeedKt(aircraftSpeedMs(ac));
       const vr  = (entry.fpm === null || entry.fpm === undefined) ? "n/a" : `${entry.fpm > 0 ? "+" : ""}${entry.fpm} fpm`;
-      const dist = `${fmtNum(entry.distMi, 1)} mi`;
       const typeTxt = bestType(ac, entry.aircraftInfo);
 
       return `
@@ -696,7 +743,6 @@ Updates in this version
             <div class="ac-k">ALT</div><div>${alt}</div>
             <div class="ac-k">SPD</div><div>${spd}</div>
             <div class="ac-k">VR</div><div>${vr}</div>
-            <div class="ac-k">DIST</div><div>${dist}</div>
           </div>
 
           <div class="ac-type">${typeTxt}</div>
@@ -812,7 +858,8 @@ Updates in this version
           keyboard: false
         }).addTo(map);
 
-        const poly = L.polyline([], { weight: 2, opacity: 0.55, color }).addTo(map);
+        /* brighter, thicker trail in night mode */
+        const poly = L.polyline([], { weight: 2.6, opacity: 0.72, color }).addTo(map);
 
         entry = {
           marker,
@@ -849,7 +896,7 @@ Updates in this version
       entry.marker.setLatLng(latLng);
       entry.marker.setIcon(makePlaneDivIcon(color, heading));
 
-      entry.poly.setStyle({ color });
+      entry.poly.setStyle({ color, opacity: 0.72, weight: 2.6 });
       entry.poly.setLatLngs(entry.history.map(p => [p.lat, p.lon]));
 
       if (ADSBDB_ENABLE) {
