@@ -2,12 +2,21 @@
 Live Flights Kiosk Map (map-only, single HTML)
 =============================================
 
-Added in this version
-- Small status overlay box in the bottom-right corner (black box).
-- Shows:
-  - Airplanes.live: OK or error, last success time, latency, aircraft count
-  - ADSBDB: enrichment queue length and recent errors
-  - Tick timing: last tick duration and seconds since last successful update
+Fixes requested
+1) Flight info boxes sometimes go off-screen and get cut off
+   - Replaced Leaflet tooltips with custom HTML label divs positioned in screen pixels
+   - Labels are clamped to the viewport so they never render off-screen
+
+2) Flight info box should only show when the plane is in the air
+   - A label only shows if:
+     - ac.on_ground is explicitly true -> hidden
+     - OR altitude is missing/invalid -> hidden
+     - OR altitude < AIRBORNE_MIN_FT -> hidden
+   - You can tune AIRBORNE_MIN_FT below
+
+Notes
+- This is still a single HTML file (no extra hosted assets beyond Leaflet + OSM tiles + the APIs).
+- Your existing tick cadence (setInterval) is kept as-is.
 
 -->
 
@@ -74,15 +83,7 @@ Added in this version
       border: 1px solid rgba(255,255,255,0.14) !important;
     }
 
-    .leaflet-tooltip {
-      padding: 0 !important;
-      background: transparent !important;
-      border: 0 !important;
-      box-shadow: none !important;
-    }
-    .leaflet-tooltip::before { display: none !important; }
-
-    /* TV-readable tag, 15% smaller than previous */
+    /* TV-readable tag */
     .ac-tag {
       background: rgba(10, 14, 18, 0.86);
       border: 1px solid rgba(255,255,255,0.18);
@@ -178,6 +179,17 @@ Added in this version
       filter: drop-shadow(0 8px 10px rgba(0,0,0,0.35));
     }
 
+    /* Custom label overlay that we clamp to the viewport */
+    .ac-label {
+      position: absolute;
+      left: 0;
+      top: 0;
+      pointer-events: none;
+      transform: translate3d(0,0,0);
+      will-change: transform;
+      z-index: 650;
+    }
+
     /* Status overlay (bottom-right) */
     #statusBox {
       position: fixed;
@@ -221,9 +233,8 @@ Added in this version
 <body>
   <div id="map"></div>
 
-  <!-- Status overlay -->
   <div id="statusBox">
-    <div class="row"><div class="k">airplanes.live.1234</div><div id="st_air">starting</div></div>
+    <div class="row"><div class="k">airplanes.live.1300</div><div id="st_air">starting</div></div>
     <div class="row"><div class="k">last ok</div><div id="st_lastok">n/a</div></div>
     <div class="row"><div class="k">latency</div><div id="st_latency">n/a</div></div>
     <div class="row"><div class="k">aircraft</div><div id="st_count">0</div></div>
@@ -243,18 +254,26 @@ Added in this version
     const FETCH_LAT = MAP_CENTER_LAT;
     const FETCH_LON = MAP_CENTER_LON;
 
-    const SEARCH_RADIUS_NM = 1.3;
+    const SEARCH_RADIUS_NM = 1.8;
 
     const UPDATE_MS = 2000;
     const FETCH_TIMEOUT_MS = 2200;
 
     const MAX_LABELED_AIRCRAFT = 10;
-    const LABEL_MAX_DISTANCE_MI = 1;   // set null to disable
-    const LABEL_ONLY_BELOW_FT = 18000;  // set null to disable
+    const LABEL_MAX_DISTANCE_MI = 1.8;     // set null to disable
+    const LABEL_ONLY_BELOW_FT = 18000;   // set null to disable
     const HISTORY_POINTS = 10;
 
     const CLIMB_FPM_THRESHOLD = 500;
     const DESC_FPM_THRESHOLD  = -500;
+
+    // Only show the flight info box if the plane is airborne.
+    // Tune this if you want (for example 100 or 300).
+    const AIRBORNE_MIN_FT = 200;
+
+    // Keep labels on-screen with a safe margin
+    const LABEL_SCREEN_PADDING_PX = 12;
+    const LABEL_OFFSET_Y_PX = 18; // how far above the plane icon the box sits
 
     const ADSBDB_ENABLE = true;
     const ADSBDB_CALLSIGN_TTL_MS = 6 * 60 * 1000;
@@ -268,7 +287,6 @@ Added in this version
       lastLatencyMs: null,
       lastCount: 0,
       lastErr: null,
-      lastTickMs: null,
       lastTickDurMs: null,
     };
 
@@ -281,12 +299,11 @@ Added in this version
 
     function fmtClock(ms) {
       if (!ms) return "n/a";
-      const d = new Date(ms);
-      return d.toLocaleTimeString();
+      return new Date(ms).toLocaleTimeString();
     }
 
     function setAirStatus(kind, text) {
-      stAir.className = kind; // ok, warn, bad
+      stAir.className = kind;
       stAir.textContent = text;
     }
 
@@ -294,7 +311,6 @@ Added in this version
       stLastOk.textContent = fmtClock(st.lastOkMs);
       stLatency.textContent = (st.lastLatencyMs === null) ? "n/a" : `${Math.round(st.lastLatencyMs)} ms`;
       stCount.textContent = `${st.lastCount}`;
-
       stQ.textContent = `${enrichQueue.length}${enrichBusy ? " (busy)" : ""}`;
 
       if (st.lastTickDurMs === null) {
@@ -432,6 +448,12 @@ Added in this version
       return [];
     }
 
+    function isAirborne(ac, altFt) {
+      if (ac && ac.on_ground === true) return false;
+      if (altFt === null || altFt === undefined || Number.isNaN(altFt)) return false;
+      return altFt >= AIRBORNE_MIN_FT;
+    }
+
     /**************************************************************
      * MAP SETUP
      **************************************************************/
@@ -457,6 +479,16 @@ Added in this version
       opacity: 1,
       fillOpacity: 0.85
     }).addTo(map);
+
+    // Label layer container (inside map overlay pane)
+    const labelLayer = document.createElement("div");
+    labelLayer.style.position = "absolute";
+    labelLayer.style.left = "0";
+    labelLayer.style.top = "0";
+    labelLayer.style.width = "100%";
+    labelLayer.style.height = "100%";
+    labelLayer.style.pointerEvents = "none";
+    map.getPanes().overlayPane.appendChild(labelLayer);
 
     /**************************************************************
      * ENRICHMENT (ADSBDB), cached and queued
@@ -663,23 +695,87 @@ Added in this version
       `;
     }
 
+    function ensureLabelDiv(entry) {
+      if (entry.labelDiv) return;
+      const d = document.createElement("div");
+      d.className = "ac-label";
+      d.style.display = "none";
+      labelLayer.appendChild(d);
+      entry.labelDiv = d;
+      entry.labelHtml = "";
+      entry.labelW = 0;
+      entry.labelH = 0;
+    }
+
+    function measureLabel(entry) {
+      if (!entry.labelDiv) return;
+      const d = entry.labelDiv;
+
+      // Measure with visibility hidden to avoid flicker
+      const prevDisplay = d.style.display;
+      const prevVis = d.style.visibility;
+
+      d.style.visibility = "hidden";
+      d.style.display = "block";
+
+      const r = d.getBoundingClientRect();
+      entry.labelW = Math.round(r.width);
+      entry.labelH = Math.round(r.height);
+
+      d.style.visibility = prevVis;
+      d.style.display = prevDisplay;
+    }
+
+    function setLabelVisible(entry, visible) {
+      if (!entry.labelDiv) return;
+      entry.labelDiv.style.display = visible ? "block" : "none";
+    }
+
+    function clamp(n, lo, hi) {
+      return Math.max(lo, Math.min(hi, n));
+    }
+
+    function positionLabel(entry) {
+      if (!entry.labelDiv) return;
+      if (!entry.labelWanted) return;
+
+      const latLng = entry.marker.getLatLng();
+      const p = map.latLngToContainerPoint(latLng);
+
+      // Anchor label centered above marker
+      const w = entry.labelW || 0;
+      const h = entry.labelH || 0;
+
+      const mapSize = map.getSize();
+      const pad = LABEL_SCREEN_PADDING_PX;
+
+      let x = p.x - (w / 2);
+      let y = p.y - h - LABEL_OFFSET_Y_PX;
+
+      x = clamp(x, pad, mapSize.x - w - pad);
+      y = clamp(y, pad, mapSize.y - h - pad);
+
+      entry.labelDiv.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`;
+    }
+
     function applyLabel(entry) {
-      const tt = entry.marker.getTooltip();
-      if (!tt) return;
+      ensureLabelDiv(entry);
 
       if (!entry.labelWanted) {
-        if (entry.labelHtml !== "") {
-          entry.labelHtml = "";
-          tt.setContent("");
-        }
+        setLabelVisible(entry, false);
         return;
       }
 
       const html = buildTag(entry);
       if (html !== entry.labelHtml) {
         entry.labelHtml = html;
-        tt.setContent(html);
+        entry.labelDiv.innerHTML = html;
+        // Re-measure when content changes
+        measureLabel(entry);
       }
+
+      setLabelVisible(entry, true);
+      positionLabel(entry);
     }
 
     function upsertAircraft(ac, nowMs) {
@@ -709,14 +805,6 @@ Added in this version
           keyboard: false
         }).addTo(map);
 
-        marker.bindTooltip("", {
-          permanent: true,
-          direction: "top",
-          offset: [0, -14],
-          opacity: 1,
-          className: ""
-        });
-
         const poly = L.polyline([], { weight: 2, opacity: 0.55, color }).addTo(map);
 
         entry = {
@@ -732,9 +820,14 @@ Added in this version
           fpm: fpm,
           state: state,
           labelWanted: false,
-          labelHtml: ""
+          labelDiv: null,
+          labelHtml: "",
+          labelW: 0,
+          labelH: 0
         };
         aircraftState.set(hex, entry);
+
+        ensureLabelDiv(entry);
       }
 
       entry.lastSeenTs = nowMs;
@@ -782,6 +875,7 @@ Added in this version
         if (nowMs - entry.lastSeenTs > STALE_MS) {
           map.removeLayer(entry.marker);
           map.removeLayer(entry.poly);
+          if (entry.labelDiv && entry.labelDiv.parentNode) entry.labelDiv.parentNode.removeChild(entry.labelDiv);
           aircraftState.delete(hex);
         }
       }
@@ -791,6 +885,10 @@ Added in this version
       const all = Array.from(aircraftState.values());
 
       const eligible = all.filter(e => {
+        // Only show labels when airborne
+        const ac = e.lastPayload || {};
+        if (!isAirborne(ac, e.altFt)) return false;
+
         if (LABEL_MAX_DISTANCE_MI !== null && e.distMi > LABEL_MAX_DISTANCE_MI) return false;
         if (LABEL_ONLY_BELOW_FT !== null && e.altFt !== null && e.altFt > LABEL_ONLY_BELOW_FT) return false;
         return true;
@@ -805,6 +903,14 @@ Added in this version
       }
     }
 
+    function repositionAllLabels() {
+      for (const e of aircraftState.values()) {
+        if (e.labelWanted) positionLabel(e);
+      }
+    }
+
+    map.on("move zoom resize", () => repositionAllLabels());
+
     /**************************************************************
      * MAIN LOOP
      **************************************************************/
@@ -814,8 +920,7 @@ Added in this version
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        const res = await fetch(url, { cache: "no-store", signal: controller.signal });
-        return res;
+        return await fetch(url, { cache: "no-store", signal: controller.signal });
       } finally {
         clearTimeout(timer);
       }
@@ -834,7 +939,6 @@ Added in this version
         const t0 = performance.now();
         const res = await fetchWithTimeout(airplanesLiveUrl(), FETCH_TIMEOUT_MS);
         const t1 = performance.now();
-
         st.lastLatencyMs = (t1 - t0);
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -847,17 +951,15 @@ Added in this version
 
         pruneStale(nowMs);
         decideLabels();
+        repositionAllLabels();
 
         st.lastOkMs = Date.now();
         setAirStatus("ok", "OK");
 
       } catch (e) {
         const name = (e && e.name) ? e.name : "Error";
-        if (name === "AbortError") {
-          setAirStatus("bad", "timeout");
-        } else {
-          setAirStatus("bad", "error");
-        }
+        if (name === "AbortError") setAirStatus("bad", "timeout");
+        else setAirStatus("bad", "error");
         st.lastErr = name;
       } finally {
         st.lastTickDurMs = (performance.now() - tickStart);
@@ -866,7 +968,6 @@ Added in this version
       }
     }
 
-    // start
     renderStatus();
     tick();
     setInterval(tick, UPDATE_MS);
