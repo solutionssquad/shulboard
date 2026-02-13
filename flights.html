@@ -1,0 +1,875 @@
+<!--
+Live Flights Kiosk Map (map-only, single HTML)
+=============================================
+
+Added in this version
+- Small status overlay box in the bottom-right corner (black box).
+- Shows:
+  - Airplanes.live: OK or error, last success time, latency, aircraft count
+  - ADSBDB: enrichment queue length and recent errors
+  - Tick timing: last tick duration and seconds since last successful update
+
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Live Flights Map</title>
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <style>
+    :root{
+      --bg: #070b10;
+
+      --text: #e7eef7;
+      --muted: rgba(255,255,255,0.72);
+
+      --climb: #3cff97;
+      --level: #6bd3ff;
+      --desc:  #ff4f66;
+
+      --accent: #6bd3ff;
+
+      --font: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      overflow: hidden;
+    }
+
+    #map {
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .leaflet-control-attribution {
+      background: rgba(0,0,0,0.32) !important;
+      color: rgba(255,255,255,0.70) !important;
+      border-radius: 10px;
+      padding: 2px 8px !important;
+      margin: 0 10px 10px 0 !important;
+    }
+    .leaflet-control-zoom a {
+      background: rgba(0,0,0,0.38) !important;
+      color: rgba(255,255,255,0.90) !important;
+      border: 1px solid rgba(255,255,255,0.14) !important;
+    }
+
+    .leaflet-tooltip {
+      padding: 0 !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+    .leaflet-tooltip::before { display: none !important; }
+
+    /* TV-readable tag, 15% smaller than previous */
+    .ac-tag {
+      background: rgba(10, 14, 18, 0.86);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 14px;
+      padding: 10px 12px;
+      box-shadow: 0 16px 34px rgba(0,0,0,0.48);
+      backdrop-filter: blur(7px);
+
+      min-width: 204px;
+      max-width: 357px;
+
+      line-height: 1.25;
+    }
+
+    .ac-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .ac-flight {
+      font-weight: 900;
+      font-size: 17px;
+      letter-spacing: 0.25px;
+      color: var(--accent);
+    }
+
+    .ac-pill {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+      font-family: var(--mono);
+      border: 1px solid rgba(255,255,255,0.16);
+      transform: translateY(1px);
+      white-space: nowrap;
+    }
+    .ac-pill.climb { color: var(--climb); }
+    .ac-pill.level { color: var(--level); }
+    .ac-pill.desc  { color: var(--desc); }
+
+    .ac-airline {
+      margin-top: 6px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.90);
+    }
+
+    .ac-route {
+      margin-top: 2px;
+      font-size: 12px;
+      color: var(--muted);
+      font-family: var(--mono);
+      letter-spacing: 0.2px;
+    }
+
+    .ac-metrics {
+      margin-top: 9px;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 6px 10px;
+      align-items: baseline;
+
+      font-family: var(--mono);
+      font-size: 13px;
+      color: rgba(255,255,255,0.92);
+    }
+
+    .ac-k {
+      color: rgba(255,255,255,0.70);
+      font-weight: 900;
+      letter-spacing: 0.6px;
+      font-size: 12px;
+    }
+
+    .ac-type {
+      margin-top: 9px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.76);
+    }
+
+    .ac-hex {
+      margin-top: 6px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: rgba(255,255,255,0.55);
+    }
+
+    .plane-icon {
+      width: 26px;
+      height: 26px;
+      transform-origin: 50% 50%;
+      filter: drop-shadow(0 8px 10px rgba(0,0,0,0.35));
+    }
+
+    /* Status overlay (bottom-right) */
+    #statusBox {
+      position: fixed;
+      right: 10px;
+      bottom: 10px;
+      z-index: 9999;
+
+      background: rgba(0,0,0,0.78);
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 10px;
+      padding: 8px 10px;
+
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.25;
+      color: rgba(255,255,255,0.88);
+
+      min-width: 240px;
+      max-width: 340px;
+      pointer-events: none;
+      backdrop-filter: blur(6px);
+    }
+
+    #statusBox .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      white-space: nowrap;
+    }
+
+    #statusBox .k {
+      color: rgba(255,255,255,0.62);
+    }
+
+    #statusBox .ok { color: var(--climb); font-weight: 800; }
+    #statusBox .warn { color: #ffd36b; font-weight: 800; }
+    #statusBox .bad { color: var(--desc); font-weight: 800; }
+  </style>
+</head>
+
+<body>
+  <div id="map"></div>
+
+  <!-- Status overlay -->
+  <div id="statusBox">
+    <div class="row"><div class="k">airplanes.live</div><div id="st_air">starting</div></div>
+    <div class="row"><div class="k">last ok</div><div id="st_lastok">n/a</div></div>
+    <div class="row"><div class="k">latency</div><div id="st_latency">n/a</div></div>
+    <div class="row"><div class="k">aircraft</div><div id="st_count">0</div></div>
+    <div class="row"><div class="k">adsbdb queue</div><div id="st_q">0</div></div>
+    <div class="row"><div class="k">tick</div><div id="st_tick">n/a</div></div>
+  </div>
+
+  <script>
+    /**************************************************************
+     * SETTINGS
+     **************************************************************/
+
+    const MAP_CENTER_LAT = 26.0660;
+    const MAP_CENTER_LON = -80.1850;
+    const MAP_ZOOM = 16;
+
+    const FETCH_LAT = MAP_CENTER_LAT;
+    const FETCH_LON = MAP_CENTER_LON;
+
+    const SEARCH_RADIUS_NM = 1.2;
+
+    const UPDATE_MS = 1500;
+    const FETCH_TIMEOUT_MS = 3500;
+
+    const MAX_LABELED_AIRCRAFT = 10;
+    const LABEL_MAX_DISTANCE_MI = 1;   // set null to disable
+    const LABEL_ONLY_BELOW_FT = 18000;  // set null to disable
+    const HISTORY_POINTS = 10;
+
+    const CLIMB_FPM_THRESHOLD = 500;
+    const DESC_FPM_THRESHOLD  = -500;
+
+    const ADSBDB_ENABLE = true;
+    const ADSBDB_CALLSIGN_TTL_MS = 6 * 60 * 1000;
+    const ADSBDB_HEX_TTL_MS      = 6 * 60 * 60 * 1000;
+
+    /**************************************************************
+     * STATUS OVERLAY STATE
+     **************************************************************/
+    const st = {
+      lastOkMs: null,
+      lastLatencyMs: null,
+      lastCount: 0,
+      lastErr: null,
+      lastTickMs: null,
+      lastTickDurMs: null,
+    };
+
+    const stAir = document.getElementById("st_air");
+    const stLastOk = document.getElementById("st_lastok");
+    const stLatency = document.getElementById("st_latency");
+    const stCount = document.getElementById("st_count");
+    const stQ = document.getElementById("st_q");
+    const stTick = document.getElementById("st_tick");
+
+    function fmtClock(ms) {
+      if (!ms) return "n/a";
+      const d = new Date(ms);
+      return d.toLocaleTimeString();
+    }
+
+    function setAirStatus(kind, text) {
+      stAir.className = kind; // ok, warn, bad
+      stAir.textContent = text;
+    }
+
+    function renderStatus() {
+      stLastOk.textContent = fmtClock(st.lastOkMs);
+      stLatency.textContent = (st.lastLatencyMs === null) ? "n/a" : `${Math.round(st.lastLatencyMs)} ms`;
+      stCount.textContent = `${st.lastCount}`;
+
+      stQ.textContent = `${enrichQueue.length}${enrichBusy ? " (busy)" : ""}`;
+
+      if (st.lastTickDurMs === null) {
+        stTick.textContent = "n/a";
+      } else {
+        const sinceOk = st.lastOkMs ? Math.max(0, (Date.now() - st.lastOkMs)) : null;
+        const sinceOkTxt = (sinceOk === null) ? "n/a" : `${Math.round(sinceOk/100)/10}s`;
+        stTick.textContent = `${Math.round(st.lastTickDurMs)} ms, ok age ${sinceOkTxt}`;
+      }
+    }
+
+    /**************************************************************
+     * UTILITIES
+     **************************************************************/
+    const NM_TO_METERS = 1852;
+    const MI_TO_METERS = 1609.344;
+
+    function haversineMeters(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const toRad = (d) => d * Math.PI / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat/2)**2 +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon/2)**2;
+      return 2 * R * Math.asin(Math.sqrt(a));
+    }
+
+    function safeText(v) {
+      if (v === null || v === undefined) return "n/a";
+      const s = String(v).trim();
+      return s.length ? s : "n/a";
+    }
+
+    function fmtNum(n, digits=1) {
+      if (n === null || n === undefined || Number.isNaN(n)) return "n/a";
+      return Number(n).toFixed(digits);
+    }
+
+    function fmtAltFeet(meters) {
+      if (meters === null || meters === undefined || Number.isNaN(meters)) return "n/a";
+      const ft = meters * 3.28084;
+      return `${Math.round(ft).toLocaleString()} ft`;
+    }
+
+    function fmtSpeedKt(ms) {
+      if (ms === null || ms === undefined || Number.isNaN(ms)) return "n/a";
+      const kt = ms * 1.943844;
+      return `${Math.round(kt)} kt`;
+    }
+
+    function fmtFpmFromMs(vrateMs) {
+      if (vrateMs === null || vrateMs === undefined || Number.isNaN(vrateMs)) return null;
+      return Math.round(vrateMs * 196.850394);
+    }
+
+    function pickLatLon(ac) {
+      if (typeof ac.lat === "number" && typeof ac.lon === "number") return { lat: ac.lat, lon: ac.lon };
+      if (ac.lastPosition && typeof ac.lastPosition.lat === "number" && typeof ac.lastPosition.lon === "number") {
+        return { lat: ac.lastPosition.lat, lon: ac.lastPosition.lon };
+      }
+      if (typeof ac.rr_lat === "number" && typeof ac.rr_lon === "number") return { lat: ac.rr_lat, lon: ac.rr_lon };
+      return null;
+    }
+
+    function aircraftAltMeters(ac) {
+      const a = ac.alt_baro ?? ac.alt_geom ?? ac.alt;
+      return (typeof a === "number") ? a : null;
+    }
+
+    function aircraftSpeedMs(ac) {
+      const s = ac.gs ?? ac.spd ?? ac.speed;
+      return (typeof s === "number") ? s : null;
+    }
+
+    function aircraftVrateMs(ac) {
+      const r = ac.baro_rate ?? ac.geom_rate ?? ac.rate;
+      return (typeof r === "number") ? r : null;
+    }
+
+    function aircraftTrackDeg(ac) {
+      const t = ac.track ?? ac.hdg ?? ac.heading;
+      return (typeof t === "number") ? t : 0;
+    }
+
+    function altFeetFromMeters(meters) {
+      if (meters === null || meters === undefined || Number.isNaN(meters)) return null;
+      return meters * 3.28084;
+    }
+
+    function climbStateFromFpm(fpm) {
+      if (fpm === null || fpm === undefined) return "level";
+      if (fpm >= CLIMB_FPM_THRESHOLD) return "climb";
+      if (fpm <= DESC_FPM_THRESHOLD) return "desc";
+      return "level";
+    }
+
+    function stateText(state) {
+      if (state === "climb") return "CLIMB";
+      if (state === "desc") return "DESC";
+      return "LEVEL";
+    }
+
+    function stateEmoji(state) {
+      if (state === "climb") return "🛫";
+      if (state === "desc") return "🛬";
+      return "✈️";
+    }
+
+    function getCss(varName) {
+      return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    }
+
+    function stateColor(state) {
+      if (state === "climb") return getCss("--climb");
+      if (state === "desc")  return getCss("--desc");
+      return getCss("--level");
+    }
+
+    function distanceMi(latLng) {
+      const dM = haversineMeters(FETCH_LAT, FETCH_LON, latLng.lat, latLng.lng);
+      return dM / MI_TO_METERS;
+    }
+
+    function airplanesLiveUrl() {
+      const base = `https://api.airplanes.live/v2/point/${encodeURIComponent(FETCH_LAT)}/${encodeURIComponent(FETCH_LON)}/${encodeURIComponent(SEARCH_RADIUS_NM)}`;
+      return `${base}?t=${Date.now()}`;
+    }
+
+    function normalizeAircraftList(raw) {
+      if (!raw) return [];
+      if (Array.isArray(raw.ac)) return raw.ac;
+      if (Array.isArray(raw.aircraft)) return raw.aircraft;
+      if (Array.isArray(raw)) return raw;
+      return [];
+    }
+
+    /**************************************************************
+     * MAP SETUP
+     **************************************************************/
+    const map = L.map("map", { zoomControl: true });
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+
+    map.setView([MAP_CENTER_LAT, MAP_CENTER_LON], MAP_ZOOM);
+
+    L.circle([FETCH_LAT, FETCH_LON], {
+      radius: SEARCH_RADIUS_NM * NM_TO_METERS,
+      weight: 1,
+      opacity: 0.55,
+      fillOpacity: 0.03
+    }).addTo(map);
+
+    L.circleMarker([FETCH_LAT, FETCH_LON], {
+      radius: 6,
+      weight: 2,
+      opacity: 1,
+      fillOpacity: 0.85
+    }).addTo(map);
+
+    /**************************************************************
+     * ENRICHMENT (ADSBDB), cached and queued
+     **************************************************************/
+    const callsignCache = new Map();
+    const hexCache = new Map();
+
+    function getCached(cache, key, ttlMs) {
+      const v = cache.get(key);
+      if (!v) return undefined;
+      if ((Date.now() - v.ts) > ttlMs) return undefined;
+      return v.data;
+    }
+    function setCached(cache, key, data) {
+      cache.set(key, { ts: Date.now(), data });
+    }
+
+    const enrichQueue = [];
+    let enrichBusy = false;
+    let adsbdbErrCount = 0;
+
+    function enqueueEnrich(job) {
+      enrichQueue.push(job);
+      renderStatus();
+      runEnrichQueue();
+    }
+
+    async function runEnrichQueue() {
+      if (enrichBusy) return;
+      enrichBusy = true;
+      renderStatus();
+
+      while (enrichQueue.length) {
+        const job = enrichQueue.shift();
+        try { await job(); }
+        catch (e) { adsbdbErrCount++; }
+        await new Promise(r => setTimeout(r, 120));
+        renderStatus();
+      }
+
+      enrichBusy = false;
+      renderStatus();
+    }
+
+    async function fetchJson(url) {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }
+
+    function parseAdsbdbRoute(payload) {
+      const root = payload && payload.response ? payload.response : null;
+      const fr = root && root.flightroute ? root.flightroute : null;
+      if (!fr) return null;
+
+      const airline = fr.airline || null;
+      const origin = fr.origin || null;
+      const dest = fr.destination || null;
+
+      return {
+        airlineName: airline ? safeText(airline.name) : "n/a",
+        originIcao: origin ? safeText(origin.icao_code) : "n/a",
+        originIata: origin ? safeText(origin.iata_code) : "n/a",
+        destIcao: dest ? safeText(dest.icao_code) : "n/a",
+        destIata: dest ? safeText(dest.iata_code) : "n/a",
+      };
+    }
+
+    function parseAdsbdbAircraft(payload) {
+      const root = payload && payload.response ? payload.response : null;
+      const ac = root && root.aircraft ? root.aircraft : null;
+      if (!ac) return null;
+
+      return {
+        icaoType: safeText(ac.icao_type),
+        type: safeText(ac.type),
+        manufacturer: safeText(ac.manufacturer),
+        registration: safeText(ac.registration),
+      };
+    }
+
+    async function ensureRouteForCallsign(callsign) {
+      const cs = safeText(callsign).toUpperCase();
+      if (cs === "N/A") return null;
+
+      const cached = getCached(callsignCache, cs, ADSBDB_CALLSIGN_TTL_MS);
+      if (cached !== undefined) return cached;
+
+      setCached(callsignCache, cs, null);
+      try {
+        const json = await fetchJson(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(cs)}`);
+        const data = parseAdsbdbRoute(json);
+        setCached(callsignCache, cs, data);
+        return data;
+      } catch (e) {
+        adsbdbErrCount++;
+        setCached(callsignCache, cs, null);
+        return null;
+      }
+    }
+
+    async function ensureAircraftForHex(hex) {
+      const hx = safeText(hex).toUpperCase();
+      if (hx === "N/A") return null;
+
+      const cached = getCached(hexCache, hx, ADSBDB_HEX_TTL_MS);
+      if (cached !== undefined) return cached;
+
+      setCached(hexCache, hx, null);
+      try {
+        const json = await fetchJson(`https://api.adsbdb.com/v0/aircraft/${encodeURIComponent(hx)}`);
+        const data = parseAdsbdbAircraft(json);
+        setCached(hexCache, hx, data);
+        return data;
+      } catch (e) {
+        adsbdbErrCount++;
+        setCached(hexCache, hx, null);
+        return null;
+      }
+    }
+
+    /**************************************************************
+     * PLANE ICON (inline SVG, rotated)
+     **************************************************************/
+    function planeSvg(color) {
+      return `
+        <svg class="plane-icon" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path fill="${color}" d="M30 4c1.5 0 3 1.2 3 3v18l20 12c1.4.8 2 2.6 1.2 4l-1.5 2.6c-.8 1.4-2.6 1.9-4 1.1L33 36v9l8 6c1 .8 1.3 2.2.7 3.3l-1.2 2c-.7 1.2-2.2 1.6-3.5 1l-8.9-4.6-8.9 4.6c-1.3.6-2.8.2-3.5-1l-1.2-2c-.6-1.1-.3-2.5.7-3.3l8-6v-9L15.3 47.3c-1.4.8-3.2.3-4-1.1L9.8 43.6c-.8-1.4-.2-3.2 1.2-4l20-12V7c0-1.8 1.5-3 3-3z"/>
+        </svg>
+      `;
+    }
+
+    function makePlaneDivIcon(color, headingDeg) {
+      const h = (typeof headingDeg === "number") ? headingDeg : 0;
+      const html = `<div style="transform: rotate(${h}deg);">${planeSvg(color)}</div>`;
+      return L.divIcon({
+        className: "",
+        html,
+        iconSize: [26, 26],
+        iconAnchor: [13, 13]
+      });
+    }
+
+    /**************************************************************
+     * AIRCRAFT STATE
+     **************************************************************/
+    const aircraftState = new Map();
+
+    function routeShort(route) {
+      if (!route) return "";
+      const o = (route.originIata && route.originIata !== "n/a") ? route.originIata : (route.originIcao || "");
+      const d = (route.destIata && route.destIata !== "n/a") ? route.destIata : (route.destIcao || "");
+      if (!o || !d || o === "n/a" || d === "n/a") return "";
+      return `${o} → ${d}`;
+    }
+
+    function bestType(acPayload, aircraftInfo) {
+      const fallback = safeText(acPayload.t || acPayload.type);
+      if (!aircraftInfo) return fallback;
+
+      const mt = (aircraftInfo.manufacturer && aircraftInfo.manufacturer !== "n/a") ? aircraftInfo.manufacturer : "";
+      const t  = (aircraftInfo.type && aircraftInfo.type !== "n/a") ? aircraftInfo.type : "";
+      const it = (aircraftInfo.icaoType && aircraftInfo.icaoType !== "n/a") ? aircraftInfo.icaoType : "";
+      const joined = [mt, t].filter(Boolean).join(" ");
+      return joined || it || fallback;
+    }
+
+    function buildTag(entry) {
+      const ac = entry.lastPayload || {};
+      const callsign = safeText(ac.flight || ac.callsign).toUpperCase();
+      const hex = safeText(ac.hex).toUpperCase();
+
+      const route = entry.routeInfo;
+      const airlineName = route && route.airlineName && route.airlineName !== "n/a" ? route.airlineName : "";
+      const rt = routeShort(route);
+
+      const alt = fmtAltFeet(aircraftAltMeters(ac));
+      const spd = fmtSpeedKt(aircraftSpeedMs(ac));
+      const vr  = (entry.fpm === null || entry.fpm === undefined) ? "n/a" : `${entry.fpm > 0 ? "+" : ""}${entry.fpm} fpm`;
+      const dist = `${fmtNum(entry.distMi, 1)} mi`;
+
+      const typeTxt = bestType(ac, entry.aircraftInfo);
+
+      return `
+        <div class="ac-tag">
+          <div class="ac-top">
+            <div class="ac-flight">${callsign}</div>
+            <div class="ac-pill ${entry.state}">${stateEmoji(entry.state)} ${stateText(entry.state)}</div>
+          </div>
+
+          ${airlineName ? `<div class="ac-airline">${airlineName}</div>` : ``}
+          ${rt ? `<div class="ac-route">${rt}</div>` : ``}
+
+          <div class="ac-metrics">
+            <div class="ac-k">ALT</div><div>${alt}</div>
+            <div class="ac-k">SPD</div><div>${spd}</div>
+            <div class="ac-k">VR</div><div>${vr}</div>
+            <div class="ac-k">DIST</div><div>${dist}</div>
+          </div>
+
+          <div class="ac-type">${typeTxt}</div>
+          <div class="ac-hex">${hex}</div>
+        </div>
+      `;
+    }
+
+    function applyLabel(entry) {
+      const tt = entry.marker.getTooltip();
+      if (!tt) return;
+
+      if (!entry.labelWanted) {
+        if (entry.labelHtml !== "") {
+          entry.labelHtml = "";
+          tt.setContent("");
+        }
+        return;
+      }
+
+      const html = buildTag(entry);
+      if (html !== entry.labelHtml) {
+        entry.labelHtml = html;
+        tt.setContent(html);
+      }
+    }
+
+    function upsertAircraft(ac, nowMs) {
+      const hex = safeText(ac.hex);
+      if (hex === "n/a") return null;
+
+      const pos = pickLatLon(ac);
+      if (!pos) return null;
+
+      const latLng = L.latLng(pos.lat, pos.lon);
+
+      const dist = distanceMi(latLng);
+      const altM = aircraftAltMeters(ac);
+      const altFt = altFeetFromMeters(altM);
+
+      const fpm = fmtFpmFromMs(aircraftVrateMs(ac));
+      const state = climbStateFromFpm(fpm);
+
+      const heading = aircraftTrackDeg(ac);
+      const color = stateColor(state);
+
+      let entry = aircraftState.get(hex);
+      if (!entry) {
+        const marker = L.marker(latLng, {
+          icon: makePlaneDivIcon(color, heading),
+          interactive: false,
+          keyboard: false
+        }).addTo(map);
+
+        marker.bindTooltip("", {
+          permanent: true,
+          direction: "top",
+          offset: [0, -14],
+          opacity: 1,
+          className: ""
+        });
+
+        const poly = L.polyline([], { weight: 2, opacity: 0.55, color }).addTo(map);
+
+        entry = {
+          marker,
+          poly,
+          history: [],
+          lastSeenTs: nowMs,
+          lastPayload: ac,
+          routeInfo: null,
+          aircraftInfo: null,
+          distMi: dist,
+          altFt: altFt,
+          fpm: fpm,
+          state: state,
+          labelWanted: false,
+          labelHtml: ""
+        };
+        aircraftState.set(hex, entry);
+      }
+
+      entry.lastSeenTs = nowMs;
+      entry.lastPayload = ac;
+      entry.distMi = dist;
+      entry.altFt = altFt;
+      entry.fpm = fpm;
+      entry.state = state;
+
+      entry.history.push({ lat: pos.lat, lon: pos.lon, ts: nowMs });
+      if (entry.history.length > HISTORY_POINTS) entry.history.shift();
+
+      entry.marker.setLatLng(latLng);
+      entry.marker.setIcon(makePlaneDivIcon(color, heading));
+
+      entry.poly.setStyle({ color });
+      entry.poly.setLatLngs(entry.history.map(p => [p.lat, p.lon]));
+
+      if (ADSBDB_ENABLE) {
+        const callsign = safeText(ac.flight || ac.callsign).toUpperCase();
+
+        if (callsign !== "N/A" && callsign !== "n/a" && entry.routeInfo === null) {
+          enqueueEnrich(async () => {
+            const route = await ensureRouteForCallsign(callsign);
+            if (route) entry.routeInfo = route;
+            renderStatus();
+          });
+        }
+
+        if (entry.aircraftInfo === null) {
+          enqueueEnrich(async () => {
+            const info = await ensureAircraftForHex(hex);
+            if (info) entry.aircraftInfo = info;
+            renderStatus();
+          });
+        }
+      }
+
+      return entry;
+    }
+
+    function pruneStale(nowMs) {
+      const STALE_MS = 60_000;
+      for (const [hex, entry] of aircraftState.entries()) {
+        if (nowMs - entry.lastSeenTs > STALE_MS) {
+          map.removeLayer(entry.marker);
+          map.removeLayer(entry.poly);
+          aircraftState.delete(hex);
+        }
+      }
+    }
+
+    function decideLabels() {
+      const all = Array.from(aircraftState.values());
+
+      const eligible = all.filter(e => {
+        if (LABEL_MAX_DISTANCE_MI !== null && e.distMi > LABEL_MAX_DISTANCE_MI) return false;
+        if (LABEL_ONLY_BELOW_FT !== null && e.altFt !== null && e.altFt > LABEL_ONLY_BELOW_FT) return false;
+        return true;
+      });
+
+      eligible.sort((a, b) => a.distMi - b.distMi);
+      const keep = new Set(eligible.slice(0, MAX_LABELED_AIRCRAFT));
+
+      for (const e of all) {
+        e.labelWanted = keep.has(e);
+        applyLabel(e);
+      }
+    }
+
+    /**************************************************************
+     * MAIN LOOP
+     **************************************************************/
+    let inFlight = false;
+
+    async function fetchWithTimeout(url, timeoutMs) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { cache: "no-store", signal: controller.signal });
+        return res;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    async function tick() {
+      if (inFlight) return;
+      inFlight = true;
+
+      const tickStart = performance.now();
+      const nowMs = Date.now();
+
+      try {
+        setAirStatus("warn", "fetching");
+
+        const t0 = performance.now();
+        const res = await fetchWithTimeout(airplanesLiveUrl(), FETCH_TIMEOUT_MS);
+        const t1 = performance.now();
+
+        st.lastLatencyMs = (t1 - t0);
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const raw = await res.json();
+
+        const aircraft = normalizeAircraftList(raw);
+        st.lastCount = aircraft.length;
+
+        for (const ac of aircraft) upsertAircraft(ac, nowMs);
+
+        pruneStale(nowMs);
+        decideLabels();
+
+        st.lastOkMs = Date.now();
+        setAirStatus("ok", "OK");
+
+      } catch (e) {
+        const name = (e && e.name) ? e.name : "Error";
+        if (name === "AbortError") {
+          setAirStatus("bad", "timeout");
+        } else {
+          setAirStatus("bad", "error");
+        }
+        st.lastErr = name;
+      } finally {
+        st.lastTickDurMs = (performance.now() - tickStart);
+        renderStatus();
+        inFlight = false;
+      }
+    }
+
+    // start
+    renderStatus();
+    tick();
+    setInterval(tick, UPDATE_MS);
+  </script>
+</body>
+</html>
