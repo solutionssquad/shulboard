@@ -2,21 +2,12 @@
 Live Flights Kiosk Map (map-only, single HTML)
 =============================================
 
-Fixes requested
-1) Flight info boxes sometimes go off-screen and get cut off
-   - Replaced Leaflet tooltips with custom HTML label divs positioned in screen pixels
-   - Labels are clamped to the viewport so they never render off-screen
-
-2) Flight info box should only show when the plane is in the air
-   - A label only shows if:
-     - ac.on_ground is explicitly true -> hidden
-     - OR altitude is missing/invalid -> hidden
-     - OR altitude < AIRBORNE_MIN_FT -> hidden
-   - You can tune AIRBORNE_MIN_FT below
-
-Notes
-- This is still a single HTML file (no extra hosted assets beyond Leaflet + OSM tiles + the APIs).
-- Your existing tick cadence (setInterval) is kept as-is.
+Updates in this version
+- Status overlay changed to a single, thin bar across the bottom (less in the way).
+- Flight info boxes reduced by about 20 percent (box size and fonts).
+- Added an easy-to-find SETTINGS block at the top of the script.
+- Added a single setting to control stale aircraft timeout: STALE_AIRCRAFT_MS.
+- Status bar now includes last error in a compact way.
 
 -->
 
@@ -83,39 +74,39 @@ Notes
       border: 1px solid rgba(255,255,255,0.14) !important;
     }
 
-    /* TV-readable tag */
+    /* Flight info tag (about 20 percent smaller) */
     .ac-tag {
       background: rgba(10, 14, 18, 0.86);
       border: 1px solid rgba(255,255,255,0.18);
-      border-radius: 14px;
-      padding: 10px 12px;
-      box-shadow: 0 16px 34px rgba(0,0,0,0.48);
+      border-radius: 12px;
+      padding: 8px 10px;
+      box-shadow: 0 14px 28px rgba(0,0,0,0.46);
       backdrop-filter: blur(7px);
 
-      min-width: 204px;
-      max-width: 357px;
+      min-width: 165px;
+      max-width: 290px;
 
-      line-height: 1.25;
+      line-height: 1.22;
     }
 
     .ac-top {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
 
     .ac-flight {
       font-weight: 900;
-      font-size: 17px;
-      letter-spacing: 0.25px;
+      font-size: 14px;
+      letter-spacing: 0.2px;
       color: var(--accent);
     }
 
     .ac-pill {
       display: inline-block;
-      padding: 3px 9px;
+      padding: 2px 7px;
       border-radius: 999px;
-      font-size: 12px;
+      font-size: 10px;
       font-weight: 900;
       font-family: var(--mono);
       border: 1px solid rgba(255,255,255,0.16);
@@ -127,48 +118,48 @@ Notes
     .ac-pill.desc  { color: var(--desc); }
 
     .ac-airline {
-      margin-top: 6px;
-      font-size: 13px;
+      margin-top: 5px;
+      font-size: 11px;
       color: rgba(255,255,255,0.90);
     }
 
     .ac-route {
       margin-top: 2px;
-      font-size: 12px;
+      font-size: 10px;
       color: var(--muted);
       font-family: var(--mono);
-      letter-spacing: 0.2px;
+      letter-spacing: 0.15px;
     }
 
     .ac-metrics {
-      margin-top: 9px;
+      margin-top: 7px;
       display: grid;
       grid-template-columns: auto 1fr;
-      gap: 6px 10px;
+      gap: 5px 8px;
       align-items: baseline;
 
       font-family: var(--mono);
-      font-size: 13px;
+      font-size: 11px;
       color: rgba(255,255,255,0.92);
     }
 
     .ac-k {
       color: rgba(255,255,255,0.70);
       font-weight: 900;
-      letter-spacing: 0.6px;
-      font-size: 12px;
+      letter-spacing: 0.45px;
+      font-size: 10px;
     }
 
     .ac-type {
-      margin-top: 9px;
-      font-size: 12px;
+      margin-top: 7px;
+      font-size: 10px;
       color: rgba(255,255,255,0.76);
     }
 
     .ac-hex {
-      margin-top: 6px;
+      margin-top: 5px;
       font-family: var(--mono);
-      font-size: 11px;
+      font-size: 9px;
       color: rgba(255,255,255,0.55);
     }
 
@@ -190,91 +181,102 @@ Notes
       z-index: 650;
     }
 
-    /* Status overlay (bottom-right) */
-    #statusBox {
+    /* One-line status bar across bottom */
+    #statusBar {
       position: fixed;
-      right: 10px;
-      bottom: 10px;
+      left: 0;
+      right: 0;
+      bottom: 0;
       z-index: 9999;
 
-      background: rgba(0,0,0,0.78);
-      border: 1px solid rgba(255,255,255,0.16);
-      border-radius: 10px;
-      padding: 8px 10px;
+      background: rgba(0,0,0,0.70);
+      border-top: 1px solid rgba(255,255,255,0.16);
+      padding: 6px 10px;
 
       font-family: var(--mono);
       font-size: 12px;
-      line-height: 1.25;
+      line-height: 1.15;
       color: rgba(255,255,255,0.88);
 
-      min-width: 240px;
-      max-width: 340px;
       pointer-events: none;
       backdrop-filter: blur(6px);
-    }
 
-    #statusBox .row {
       display: flex;
-      justify-content: space-between;
-      gap: 10px;
+      gap: 14px;
+      align-items: center;
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    #statusBox .k {
-      color: rgba(255,255,255,0.62);
-    }
+    #statusBar .k { color: rgba(255,255,255,0.62); }
+    #statusBar .ok { color: var(--climb); font-weight: 800; }
+    #statusBar .warn { color: #ffd36b; font-weight: 800; }
+    #statusBar .bad { color: var(--desc); font-weight: 800; }
 
-    #statusBox .ok { color: var(--climb); font-weight: 800; }
-    #statusBox .warn { color: #ffd36b; font-weight: 800; }
-    #statusBox .bad { color: var(--desc); font-weight: 800; }
+    #statusBar .spacer {
+      flex: 1 1 auto;
+      min-width: 10px;
+    }
   </style>
 </head>
 
 <body>
   <div id="map"></div>
 
-  <div id="statusBox">
-    <div class="row"><div class="k">airplanes.live.1316</div><div id="st_air">starting</div></div>
-    <div class="row"><div class="k">last ok</div><div id="st_lastok">n/a</div></div>
-    <div class="row"><div class="k">latency</div><div id="st_latency">n/a</div></div>
-    <div class="row"><div class="k">aircraft</div><div id="st_count">0</div></div>
-    <div class="row"><div class="k">adsbdb queue</div><div id="st_q">0</div></div>
-    <div class="row"><div class="k">tick</div><div id="st_tick">n/a</div></div>
+  <div id="statusBar" aria-hidden="true">
+    <span class="k">airplanes</span><span id="st_air" class="warn">starting</span>
+    <span class="k">last ok</span><span id="st_lastok">n/a</span>
+    <span class="k">lat</span><span id="st_latency">n/a</span>
+    <span class="k">ac</span><span id="st_count">0</span>
+    <span class="k">q</span><span id="st_q">0</span>
+    <span class="k">tick</span><span id="st_tick">n/a</span>
+    <span class="spacer"></span>
+    <span class="k">err</span><span id="st_err">n/a</span>
   </div>
 
   <script>
-    /**************************************************************
-     * SETTINGS
-     **************************************************************/
+    /***********************************************************************
+     * SETTINGS (EDIT THESE)
+     ***********************************************************************
+     * These are the only values you should need to change most of the time.
+     ***********************************************************************/
 
+    // Map view
     const MAP_CENTER_LAT = 26.0720;
     const MAP_CENTER_LON = -80.1850;
     const MAP_ZOOM = 14;
 
+    // Data fetch location and radius
     const FETCH_LAT = MAP_CENTER_LAT;
     const FETCH_LON = MAP_CENTER_LON;
-
     const SEARCH_RADIUS_NM = 1.8;
 
+    // Update loop
     const UPDATE_MS = 1000;
     const FETCH_TIMEOUT_MS = 1000;
 
+    // Remove aircraft if not seen for this long (stale timeout)
+    const STALE_AIRCRAFT_MS = 60_000;
+
+    // Labels
     const MAX_LABELED_AIRCRAFT = 10;
-    const LABEL_MAX_DISTANCE_MI = 2.5;     // set null to disable
+    const LABEL_MAX_DISTANCE_MI = 2.5;   // set null to disable
     const LABEL_ONLY_BELOW_FT = 18000;   // set null to disable
     const HISTORY_POINTS = 4;
 
+    // Climb/descent thresholds
     const CLIMB_FPM_THRESHOLD = 500;
     const DESC_FPM_THRESHOLD  = -500;
 
-    // Only show the flight info box if the plane is airborne.
-    // Tune this if you want (for example 100 or 300).
+    // Only show the flight info box if the plane is airborne
     const AIRBORNE_MIN_FT = 200;
 
     // Keep labels on-screen with a safe margin
     const LABEL_SCREEN_PADDING_PX = 12;
-    const LABEL_OFFSET_Y_PX = 18; // how far above the plane icon the box sits
+    const LABEL_OFFSET_Y_PX = 16;
 
+    // Optional enrichment (route, aircraft type)
     const ADSBDB_ENABLE = true;
     const ADSBDB_CALLSIGN_TTL_MS = 6 * 60 * 1000;
     const ADSBDB_HEX_TTL_MS      = 6 * 60 * 60 * 1000;
@@ -287,6 +289,7 @@ Notes
       lastLatencyMs: null,
       lastCount: 0,
       lastErr: null,
+      lastErrDetail: null,
       lastTickDurMs: null,
     };
 
@@ -296,6 +299,7 @@ Notes
     const stCount = document.getElementById("st_count");
     const stQ = document.getElementById("st_q");
     const stTick = document.getElementById("st_tick");
+    const stErr = document.getElementById("st_err");
 
     function fmtClock(ms) {
       if (!ms) return "n/a";
@@ -309,16 +313,23 @@ Notes
 
     function renderStatus() {
       stLastOk.textContent = fmtClock(st.lastOkMs);
-      stLatency.textContent = (st.lastLatencyMs === null) ? "n/a" : `${Math.round(st.lastLatencyMs)} ms`;
+      stLatency.textContent = (st.lastLatencyMs === null) ? "n/a" : `${Math.round(st.lastLatencyMs)}ms`;
       stCount.textContent = `${st.lastCount}`;
-      stQ.textContent = `${enrichQueue.length}${enrichBusy ? " (busy)" : ""}`;
+      stQ.textContent = `${enrichQueue.length}${enrichBusy ? "*" : ""}`;
 
       if (st.lastTickDurMs === null) {
         stTick.textContent = "n/a";
       } else {
         const sinceOk = st.lastOkMs ? Math.max(0, (Date.now() - st.lastOkMs)) : null;
         const sinceOkTxt = (sinceOk === null) ? "n/a" : `${Math.round(sinceOk/100)/10}s`;
-        stTick.textContent = `${Math.round(st.lastTickDurMs)} ms, ok age ${sinceOkTxt}`;
+        stTick.textContent = `${Math.round(st.lastTickDurMs)}ms okAge ${sinceOkTxt}`;
+      }
+
+      if (!st.lastErr) {
+        stErr.textContent = "n/a";
+      } else {
+        const compact = st.lastErrDetail ? `${st.lastErr}:${st.lastErrDetail}` : st.lastErr;
+        stErr.textContent = compact.slice(0, 44);
       }
     }
 
@@ -633,7 +644,7 @@ Notes
     }
 
     /**************************************************************
-     * AIRCRAFT STATE
+     * AIRCRAFT STATE + LABELS
      **************************************************************/
     const aircraftState = new Map();
 
@@ -669,7 +680,6 @@ Notes
       const spd = fmtSpeedKt(aircraftSpeedMs(ac));
       const vr  = (entry.fpm === null || entry.fpm === undefined) ? "n/a" : `${entry.fpm > 0 ? "+" : ""}${entry.fpm} fpm`;
       const dist = `${fmtNum(entry.distMi, 1)} mi`;
-
       const typeTxt = bestType(ac, entry.aircraftInfo);
 
       return `
@@ -711,7 +721,6 @@ Notes
       if (!entry.labelDiv) return;
       const d = entry.labelDiv;
 
-      // Measure with visibility hidden to avoid flicker
       const prevDisplay = d.style.display;
       const prevVis = d.style.visibility;
 
@@ -742,7 +751,6 @@ Notes
       const latLng = entry.marker.getLatLng();
       const p = map.latLngToContainerPoint(latLng);
 
-      // Anchor label centered above marker
       const w = entry.labelW || 0;
       const h = entry.labelH || 0;
 
@@ -770,7 +778,6 @@ Notes
       if (html !== entry.labelHtml) {
         entry.labelHtml = html;
         entry.labelDiv.innerHTML = html;
-        // Re-measure when content changes
         measureLabel(entry);
       }
 
@@ -826,7 +833,6 @@ Notes
           labelH: 0
         };
         aircraftState.set(hex, entry);
-
         ensureLabelDiv(entry);
       }
 
@@ -870,9 +876,8 @@ Notes
     }
 
     function pruneStale(nowMs) {
-      const STALE_MS = 60_000;
       for (const [hex, entry] of aircraftState.entries()) {
-        if (nowMs - entry.lastSeenTs > STALE_MS) {
+        if (nowMs - entry.lastSeenTs > STALE_AIRCRAFT_MS) {
           map.removeLayer(entry.marker);
           map.removeLayer(entry.poly);
           if (entry.labelDiv && entry.labelDiv.parentNode) entry.labelDiv.parentNode.removeChild(entry.labelDiv);
@@ -885,7 +890,6 @@ Notes
       const all = Array.from(aircraftState.values());
 
       const eligible = all.filter(e => {
-        // Only show labels when airborne
         const ac = e.lastPayload || {};
         if (!isAirborne(ac, e.altFt)) return false;
 
@@ -935,15 +939,21 @@ Notes
 
       try {
         setAirStatus("warn", "fetching");
+        st.lastErr = null;
+        st.lastErrDetail = null;
 
         const t0 = performance.now();
         const res = await fetchWithTimeout(airplanesLiveUrl(), FETCH_TIMEOUT_MS);
         const t1 = performance.now();
         st.lastLatencyMs = (t1 - t0);
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const raw = await res.json();
+        if (!res.ok) {
+          st.lastErr = "HTTP";
+          st.lastErrDetail = String(res.status);
+          throw new Error(`HTTP ${res.status}`);
+        }
 
+        const raw = await res.json();
         const aircraft = normalizeAircraftList(raw);
         st.lastCount = aircraft.length;
 
@@ -958,9 +968,15 @@ Notes
 
       } catch (e) {
         const name = (e && e.name) ? e.name : "Error";
-        if (name === "AbortError") setAirStatus("bad", "timeout");
-        else setAirStatus("bad", "error");
-        st.lastErr = name;
+        if (name === "AbortError") {
+          setAirStatus("bad", "timeout");
+          st.lastErr = "timeout";
+          st.lastErrDetail = null;
+        } else if (!st.lastErr) {
+          setAirStatus("bad", "error");
+          st.lastErr = "error";
+          st.lastErrDetail = name;
+        }
       } finally {
         st.lastTickDurMs = (performance.now() - tickStart);
         renderStatus();
