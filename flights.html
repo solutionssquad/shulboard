@@ -17,7 +17,7 @@ Night radar preset (visual-only changes)
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Live Flights Map Demo6</title>
+  <title>Live Flights Map Demo7</title>
 
   <link
     rel="stylesheet"
@@ -295,15 +295,15 @@ Night radar preset (visual-only changes)
 
     // Update loop
     const UPDATE_MS = 1000;
-    const FETCH_TIMEOUT_MS = 2000;
+    const FETCH_TIMEOUT_MS = 500;
 
     // Remove aircraft if not seen for this long (stale timeout)
     const STALE_AIRCRAFT_MS = 10_000;
 
     // Labels
     const MAX_LABELED_AIRCRAFT = 5;
-    const LABEL_MAX_DISTANCE_MI = 2.0;   // set null to disable
-    const LABEL_ONLY_BELOW_FT = 10000;   // set null to disable
+    const LABEL_MAX_DISTANCE_MI = 2.3;   // set null to disable
+    const LABEL_ONLY_BELOW_FT = 7200;   // set null to disable
     const HISTORY_POINTS = 18;
 
     // Climb/descent thresholds
