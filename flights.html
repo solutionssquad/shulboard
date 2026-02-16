@@ -267,19 +267,18 @@ Night radar preset (visual-only changes)
   <div id="map"></div>
 
   <div id="statusBar" aria-hidden="true">
-    <span class="k">+airplanes</span><span id="st_air" class="warn">starting</span>
+    <span class="k">s</span><span id="st_air" class="warn">starting</span>
     <span class="k">last ok</span><span id="st_lastok">n/a</span>
     <span class="k">lat</span><span id="st_latency">n/a</span>
     <span class="k">ac</span><span id="st_count">0</span>
     <span class="k">q</span><span id="st_q">0</span>
     <span class="k">tick</span><span id="st_tick">n/a</span>
-    <span class="spacer"></span>
     <span class="k">err</span><span id="st_err">n/a</span>
   </div>
 
   <script>
     /***********************************************************************
-     * SETTINGS (EDIT THESE)
+     * SETTINGS (EDIT THESE)  <span class="spacer"></span> 
      ***********************************************************************
      * These are the only values you should need to change most of the time.
      ***********************************************************************/
@@ -292,7 +291,7 @@ Night radar preset (visual-only changes)
     // Data fetch location and radius
     const FETCH_LAT = MAP_CENTER_LAT;
     const FETCH_LON = MAP_CENTER_LON;
-    const SEARCH_RADIUS_NM = 2.5;
+    const SEARCH_RADIUS_NM = 3;
 
     // Update loop
     const UPDATE_MS = 1000;
@@ -303,16 +302,16 @@ Night radar preset (visual-only changes)
 
     // Labels
     const MAX_LABELED_AIRCRAFT = 10;
-    const LABEL_MAX_DISTANCE_MI = 2.5;   // set null to disable
+    const LABEL_MAX_DISTANCE_MI = 3;   // set null to disable
     const LABEL_ONLY_BELOW_FT = 18000;   // set null to disable
-    const HISTORY_POINTS = 4;
+    const HISTORY_POINTS = 10;
 
     // Climb/descent thresholds
     const CLIMB_FPM_THRESHOLD = 500;
     const DESC_FPM_THRESHOLD  = -500;
 
     // Only show the flight info box if the plane is airborne
-    const AIRBORNE_MIN_FT = 50;
+    const AIRBORNE_MIN_FT = 10;
 
     // Keep labels on-screen with a safe margin
     const LABEL_SCREEN_PADDING_PX = 12;
