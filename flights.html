@@ -295,15 +295,15 @@ Night radar preset (visual-only changes)
 
     // Update loop
     const UPDATE_MS = 1000;
-    const FETCH_TIMEOUT_MS = 1000;
+    const FETCH_TIMEOUT_MS = 500;
 
     // Remove aircraft if not seen for this long (stale timeout)
     const STALE_AIRCRAFT_MS = 60_000;
 
     // Labels
-    const MAX_LABELED_AIRCRAFT = 10;
+    const MAX_LABELED_AIRCRAFT = 8;
     const LABEL_MAX_DISTANCE_MI = 3;   // set null to disable
-    const LABEL_ONLY_BELOW_FT = 18000;   // set null to disable
+    const LABEL_ONLY_BELOW_FT = 5200;   // set null to disable
     const HISTORY_POINTS = 10;
 
     // Climb/descent thresholds
@@ -311,7 +311,7 @@ Night radar preset (visual-only changes)
     const DESC_FPM_THRESHOLD  = -500;
 
     // Only show the flight info box if the plane is airborne
-    const AIRBORNE_MIN_FT = 10;
+    const AIRBORNE_MIN_FT = 50;
 
     // Keep labels on-screen with a safe margin
     const LABEL_SCREEN_PADDING_PX = 12;
