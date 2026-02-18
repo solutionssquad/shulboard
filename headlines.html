@@ -3,12 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Headlines Rev6</title>
+<title>Headlines Rev9</title>
 
 <style>
 :root{
   --fontSize: 42px;
   --sourceSize: 30px;
+  --timeSize: 14px;     /* NEW: small timestamp under source */
   --gap: 30px;
   --dotSize: 8px;
   --padX: 14px;
@@ -29,23 +30,21 @@ html, body {
   width: 100%;
   display: flex;
   align-items: center;
-  background: #000000;
+  background: #000;
   color: #fff;
 }
 
-/* KEY CHANGE: flex centering container */
 .track {
   position: relative;
   flex: 1 1 auto;
   height: 100%;
-  display: flex;                 /* added */
-  align-items: center;           /* added */
+  display: flex;
+  align-items: center;
   overflow: hidden;
   padding: 0 var(--padX);
   box-sizing: border-box;
 }
 
-/* Scrolling content */
 .marquee {
   position: absolute;
   left: 0;
@@ -57,7 +56,6 @@ html, body {
   padding-left: 100%;
 }
 
-/* Ensure items are vertically centered */
 .item {
   display: inline-flex;
   align-items: center;
@@ -72,10 +70,27 @@ html, body {
   flex: 0 0 auto;
 }
 
+/* Source + time stacked vertically */
+.sourceBlock {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+  margin-right: 6px;
+}
+
 .source {
   color: #cdd5df;
   font-weight: 800;
   font-size: var(--sourceSize);
+  line-height: 1;
+}
+
+.time {
+  color: #7f8a96;
+  font-weight: 650;
+  font-size: var(--timeSize);
+  line-height: 1;
+  margin-top: 2px;
 }
 
 .title {
@@ -84,13 +99,12 @@ html, body {
   font-size: var(--fontSize);
 }
 
-/* Status overlay matches same centering */
 .status {
   position: absolute;
   inset: 0;
   display: none;
   align-items: center;
-  justify-content: flex-start;   /* same left padding feel */
+  justify-content: flex-start;
   padding: 0 var(--padX);
   color: #f0f0f0;
   font-size: calc(var(--fontSize) - 12px);
@@ -98,8 +112,6 @@ html, body {
 
 a { color: inherit; text-decoration: none; }
 </style>
-
-
 </head>
 
 <body>
@@ -112,37 +124,19 @@ a { color: inherit; text-decoration: none; }
 
 <script>
 /* =========================================================
-   Rev4 approach
-   =========================================================
-   In wallboards, RSS fetch failures are usually:
-   - CORS blocks the feed directly
-   - A proxy is down or rate-limiting
-   - Proxy returns HTML wrapper, not raw XML
-   - Feed is Atom, not RSS
+   Headlines wallboard ticker
+   - Per feed: take latest 3 items
+   - Timestamp under source: "Thu 15:07" (day-of-week + 24h time)
+   ========================================================= */
 
-   Fixes in Rev4:
-   1) Tries direct fetch first (some feeds allow it)
-   2) Tries multiple proxies (not just AllOrigins)
-   3) Extracts XML out of HTML-wrapped proxy responses
-   4) Parses both RSS (<item>) and Atom (<entry>)
-   5) Shows a helpful debug status if all feeds fail
-   6) Uses cached last-good headlines as fallback
-*/
-
-/* -----------------------------
-   Tuning
-   ----------------------------- */
-const SPEED_PX_PER_SEC = 80;
-const MAX_ITEMS = 12;
+/* Tuning */
+const SPEED_PX_PER_SEC = 70;
+const PER_FEED_MAX = 4;
+const MAX_ITEMS = 60;          // safety cap after merge
 const REFRESH_MINUTES = 10;
-
-/* Turn this on to see which feeds/proxies are failing in the status line */
 const DEBUG = true;
 
-/* -----------------------------
-   Feeds
-   Keep a few. Any one can break.
-   ----------------------------- */
+/* Feeds */
 const FEEDS = [
   { name: "BBC",        url: "https://feeds.bbci.co.uk/news/rss.xml" },
   { name: "NPR",        url: "https://feeds.npr.org/1001/rss.xml" },
@@ -151,8 +145,8 @@ const FEEDS = [
   { name: "AP",         url: "https://apnews.com/hub/ap-top-news?output=rss" }
 ];
 
-/* Cache key (last-known-good headlines) */
-const CACHE_KEY = "headlines_rev4_cache_v1";
+/* Cache key */
+const CACHE_KEY = "headlines_rev9_cache_v1";
 
 /* DOM refs */
 const statusEl = document.getElementById("status");
@@ -167,31 +161,18 @@ function hideStatus() {
   statusEl.style.display = "none";
 }
 
-/* -----------------------------
-   Proxy builders
-   Each returns a full URL to request.
-   ----------------------------- */
+/* Proxy candidates */
 function proxyCandidates(originalUrl) {
   const u = encodeURIComponent(originalUrl);
-
   return [
-    /* Direct attempt first */
     originalUrl,
-
-    /* Codetabs proxy */
     "https://api.codetabs.com/v1/proxy?quest=" + u,
-
-    /* Freeboard thingproxy */
     "https://thingproxy.freeboard.io/fetch/" + originalUrl,
-
-    /* AllOrigins raw */
     "https://api.allorigins.win/raw?url=" + u
   ];
 }
 
-/* -----------------------------
-   Fetch with timeout
-   ----------------------------- */
+/* Fetch with timeout */
 async function fetchText(url, timeoutMs) {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
@@ -204,14 +185,9 @@ async function fetchText(url, timeoutMs) {
   }
 }
 
-/* -----------------------------
-   Some proxies return HTML wrappers.
-   This extracts the XML portion if it exists.
-   ----------------------------- */
+/* Extract XML from wrapper pages */
 function extractXmlMaybe(text) {
   const lower = text.toLowerCase();
-
-  /* Find RSS or Atom start */
   const rssStart = lower.indexOf("<rss");
   const feedStart = lower.indexOf("<feed");
   let start = -1;
@@ -226,17 +202,12 @@ function extractXmlMaybe(text) {
   }
 
   if (start === -1) return "";
-
   const end = lower.lastIndexOf(endTag);
   if (end === -1) return text.slice(start);
-
   return text.slice(start, end + endTag.length);
 }
 
-/* -----------------------------
-   Parse RSS and Atom
-   Output: [{title, link, pubDate, source}]
-   ----------------------------- */
+/* Parse RSS + Atom */
 function parseFeedXml(xmlText, sourceName) {
   const doc = new DOMParser().parseFromString(xmlText, "text/xml");
   if (doc.querySelector("parsererror")) return [];
@@ -283,9 +254,7 @@ function parseFeedXml(xmlText, sourceName) {
   return out;
 }
 
-/* -----------------------------
-   Dedupe and sorting helpers
-   ----------------------------- */
+/* Helpers */
 function normalizeTitle(t) {
   return t.toLowerCase().replace(/\s+/g, " ").replace(/[“”"']/g, "").trim();
 }
@@ -305,10 +274,20 @@ function safeTime(s) {
   return Number.isFinite(t) ? t : 0;
 }
 
-/* -----------------------------
-   Build the marquee DOM
-   - Creates one run of items then appends a clone for seamless looping.
-   ----------------------------- */
+/* Timestamp format: "Thu 15:07" (local time, 24h) */
+function formatStamp(pubDate) {
+  const t = safeTime(pubDate);
+  if (!t) return "";
+  const d = new Date(t);
+
+  const dow = d.toLocaleDateString([], { weekday: "short" });
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+
+  return dow + " " + hh + ":" + mm;
+}
+
+/* Build marquee */
 function buildMarquee(items) {
   marqueeEl.innerHTML = "";
 
@@ -319,14 +298,22 @@ function buildMarquee(items) {
     const dot = document.createElement("span");
     dot.className = "dot";
 
+    const sourceBlock = document.createElement("span");
+    sourceBlock.className = "sourceBlock";
+
     const src = document.createElement("span");
     src.className = "source";
     src.textContent = h.source;
 
+    const time = document.createElement("span");
+    time.className = "time";
+    time.textContent = formatStamp(h.pubDate);
+
+    sourceBlock.appendChild(src);
+    if (time.textContent) sourceBlock.appendChild(time);
+
     const a = document.createElement("a");
     a.href = h.link;
-
-    /* Do not navigate the iframe page away */
     a.target = "_blank";
     a.rel = "noopener noreferrer";
 
@@ -335,8 +322,9 @@ function buildMarquee(items) {
     title.textContent = h.title;
 
     a.appendChild(title);
+
     span.appendChild(dot);
-    span.appendChild(src);
+    span.appendChild(sourceBlock);
     span.appendChild(a);
 
     marqueeEl.appendChild(span);
@@ -347,9 +335,7 @@ function buildMarquee(items) {
   marqueeEl.appendChild(clone);
 }
 
-/* -----------------------------
-   Scroll animation
-   ----------------------------- */
+/* Scroll animation */
 let animId = null;
 let x = 0;
 let lastTs = null;
@@ -376,9 +362,7 @@ function startScroll() {
   animId = requestAnimationFrame(step);
 }
 
-/* -----------------------------
-   Cache helpers
-   ----------------------------- */
+/* Cache */
 function saveCache(items) {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), items }));
@@ -396,10 +380,7 @@ function loadCache() {
   }
 }
 
-/* -----------------------------
-   Fetch one feed using multiple candidates
-   Returns { items, errors } so we can debug.
-   ----------------------------- */
+/* Fetch one feed with per-feed limiting */
 async function fetchFeed(feed) {
   const candidates = proxyCandidates(feed.url);
   const errors = [];
@@ -407,14 +388,19 @@ async function fetchFeed(feed) {
   for (const u of candidates) {
     try {
       const text = await fetchText(u, 9000);
-
-      /* Pull XML out if the proxy added wrapper text */
       const xml = extractXmlMaybe(text) || text;
 
-      const items = parseFeedXml(xml, feed.name);
-      if (items.length) return { items, errors };
+      let items = parseFeedXml(xml, feed.name);
+      if (!items.length) {
+        errors.push(feed.name + " parse-empty via " + short(u));
+        continue;
+      }
 
-      errors.push(feed.name + " parse-empty via " + short(u));
+      /* newest first, then cap per feed */
+      items.sort((a, b) => safeTime(b.pubDate) - safeTime(a.pubDate));
+      items = items.slice(0, PER_FEED_MAX);
+
+      return { items, errors };
     } catch (e) {
       errors.push(feed.name + " " + String(e.message || e) + " via " + short(u));
     }
@@ -432,9 +418,7 @@ function short(u) {
   }
 }
 
-/* -----------------------------
-   Main refresh
-   ----------------------------- */
+/* Main refresh */
 async function refresh() {
   showStatus("Loading headlines...");
 
@@ -454,7 +438,6 @@ async function refresh() {
   items.sort((a, b) => safeTime(b.pubDate) - safeTime(a.pubDate));
   items = items.slice(0, MAX_ITEMS);
 
-  /* If nothing loaded, use cache, else show debug errors */
   if (!items.length) {
     const cached = loadCache();
     if (cached && cached.length) {
@@ -478,7 +461,6 @@ async function refresh() {
   saveCache(items);
 }
 
-/* Start now and refresh periodically */
 refresh();
 setInterval(refresh, REFRESH_MINUTES * 60 * 1000);
 </script>
