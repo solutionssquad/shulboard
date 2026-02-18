@@ -3,16 +3,21 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Headlines Rev2</title>
+<title>Headlines Rev5</title>
 
 <style>
+/* =========================================================
+   Headlines ticker Rev4
+   Goal: stop "No headlines available" by being much more robust.
+   ========================================================= */
+
+/* Visual controls */
 :root{
-  --fontSize: 16px;        /* main headline font size */
-  --sourceSize: 13px;      /* source label font size */
-  --gap: 26px;             /* spacing between items */
-  --dotSize: 7px;          /* dot size */
-  --speed: 90;             /* pixels per second */
-  --padX: 12px;            /* left/right padding */
+  --fontSize: 46px;     /* headline font size */
+  --sourceSize: 30px;   /* source label font size */
+  --gap: 30px;          /* spacing between items */
+  --dotSize: 8px;       /* dot size */
+  --padX: 14px;         /* left/right padding */
 }
 
 html, body {
@@ -20,7 +25,7 @@ html, body {
   padding: 0;
   width: 100%;
   height: 100%;
-  background: #0C0;
+  background: #000;
   overflow: hidden;
   font-family: Arial, sans-serif;
 }
@@ -30,7 +35,7 @@ html, body {
   width: 100%;
   display: flex;
   align-items: center;
-  background: #C00;
+  background: #000;
   color: #fff;
 }
 
@@ -43,6 +48,7 @@ html, body {
   box-sizing: border-box;
 }
 
+/* Scrolling content container */
 .marquee {
   position: absolute;
   white-space: nowrap;
@@ -57,8 +63,7 @@ html, body {
 .item {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  color: #eaeaea;
+  gap: 12px;
 }
 
 .dot {
@@ -70,25 +75,26 @@ html, body {
 }
 
 .source {
-  color: #9aa4b2;
-  font-weight: 700;
+  color: #cdd5df;
+  font-weight: 800;
   font-size: var(--sourceSize);
 }
 
 .title {
-  color: #f2f2f2;
-  font-weight: 600;
+  color: #ffffff;
+  font-weight: 650;
   font-size: var(--fontSize);
 }
 
+/* Status overlay (loading, errors, debug) */
 .status {
   position: absolute;
   inset: 0;
   display: none;
   align-items: center;
   padding: 0 var(--padX);
-  color: #b7b7b7;
-  font-size: calc(var(--fontSize) - 2px);
+  color: #f0f0f0;
+  font-size: calc(var(--fontSize) - 12px);
 }
 
 a { color: inherit; text-decoration: none; }
@@ -98,94 +104,212 @@ a { color: inherit; text-decoration: none; }
 <body>
 <div class="bar">
   <div class="track">
-    <div id="status" class="status">Loading headlines...</div>
+    <div id="status" class="status">Loading...</div>
     <div id="marquee" class="marquee"></div>
   </div>
 </div>
 
 <script>
-/*
-HEADLINES TICKER Rev2 (Top 5)
+/* =========================================================
+   Rev4 approach
+   =========================================================
+   In wallboards, RSS fetch failures are usually:
+   - CORS blocks the feed directly
+   - A proxy is down or rate-limiting
+   - Proxy returns HTML wrapper, not raw XML
+   - Feed is Atom, not RSS
 
-Adjustable options (at top):
-- FONT_SIZE_PX: headline size
-- SOURCE_SIZE_PX: source label size
-- SPEED_PX_PER_SEC: scroll speed
-- MAX_ITEMS: how many headlines to show
-- REFRESH_MINUTES: refresh interval
-
-Note: uses AllOrigins CORS proxy to fetch RSS.
+   Fixes in Rev4:
+   1) Tries direct fetch first (some feeds allow it)
+   2) Tries multiple proxies (not just AllOrigins)
+   3) Extracts XML out of HTML-wrapped proxy responses
+   4) Parses both RSS (<item>) and Atom (<entry>)
+   5) Shows a helpful debug status if all feeds fail
+   6) Uses cached last-good headlines as fallback
 */
 
-const FONT_SIZE_PX = 46;
-const SOURCE_SIZE_PX = 43;
-const SPEED_PX_PER_SEC = 67;
-const MAX_ITEMS = 10;
+/* -----------------------------
+   Tuning
+   ----------------------------- */
+const SPEED_PX_PER_SEC = 70;
+const MAX_ITEMS = 12;
 const REFRESH_MINUTES = 10;
 
+/* Turn this on to see which feeds/proxies are failing in the status line */
+const DEBUG = true;
+
+/* -----------------------------
+   Feeds
+   Keep a few. Any one can break.
+   ----------------------------- */
 const FEEDS = [
-  { name: "BBC", url: "https://feeds.bbci.co.uk/news/rss.xml" },
-  { name: "Reuters", url: "https://feeds.reuters.com/reuters/topNews" },
-  { name: "AP", url: "https://apnews.com/hub/ap-top-news?output=rss" },
-  { name: "NPR", url: "https://feeds.npr.org/1001/rss.xml" }
+  { name: "BBC",        url: "https://feeds.bbci.co.uk/news/rss.xml" },
+  { name: "NPR",        url: "https://feeds.npr.org/1001/rss.xml" },
+  { name: "Guardian",   url: "https://www.theguardian.com/world/rss" },
+  { name: "Al Jazeera", url: "https://www.aljazeera.com/xml/rss/all.xml" },
+  { name: "AP",         url: "https://apnews.com/hub/ap-top-news?output=rss" }
 ];
 
-document.documentElement.style.setProperty("--fontSize", FONT_SIZE_PX + "px");
-document.documentElement.style.setProperty("--sourceSize", SOURCE_SIZE_PX + "px");
+/* Cache key (last-known-good headlines) */
+const CACHE_KEY = "headlines_rev4_cache_v1";
 
+/* DOM refs */
 const statusEl = document.getElementById("status");
 const marqueeEl = document.getElementById("marquee");
 
+/* Status helpers */
 function showStatus(msg) {
   statusEl.style.display = "flex";
   statusEl.textContent = msg;
 }
-
 function hideStatus() {
   statusEl.style.display = "none";
 }
 
-function proxy(url) {
-  return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
+/* -----------------------------
+   Proxy builders
+   Each returns a full URL to request.
+   ----------------------------- */
+function proxyCandidates(originalUrl) {
+  const u = encodeURIComponent(originalUrl);
+
+  return [
+    /* Direct attempt first */
+    originalUrl,
+
+    /* Codetabs proxy */
+    "https://api.codetabs.com/v1/proxy?quest=" + u,
+
+    /* Freeboard thingproxy */
+    "https://thingproxy.freeboard.io/fetch/" + originalUrl,
+
+    /* AllOrigins raw */
+    "https://api.allorigins.win/raw?url=" + u
+  ];
 }
 
-function parseRss(xmlText) {
-  const doc = new DOMParser().parseFromString(xmlText, "text/xml");
-  const items = Array.from(doc.querySelectorAll("item")).slice(0, 10);
-  return items.map((it) => ({
-    title: (it.querySelector("title")?.textContent || "").trim(),
-    link: (it.querySelector("link")?.textContent || "").trim(),
-    pubDate: (it.querySelector("pubDate")?.textContent || "").trim()
-  })).filter(x => x.title && x.link);
-}
-
-async function fetchFeed(feed) {
-  const res = await fetch(proxy(feed.url), { cache: "no-store" });
-  if (!res.ok) throw new Error("HTTP " + res.status);
-  const text = await res.text();
-  return parseRss(text).map(x => ({ ...x, source: feed.name }));
-}
-
-function dedupeByTitle(list) {
-  const seen = new Set();
-  const out = [];
-  for (const x of list) {
-    const key = x.title.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(x);
+/* -----------------------------
+   Fetch with timeout
+   ----------------------------- */
+async function fetchText(url, timeoutMs) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { cache: "no-store", signal: controller.signal });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return await res.text();
+  } finally {
+    clearTimeout(t);
   }
+}
+
+/* -----------------------------
+   Some proxies return HTML wrappers.
+   This extracts the XML portion if it exists.
+   ----------------------------- */
+function extractXmlMaybe(text) {
+  const lower = text.toLowerCase();
+
+  /* Find RSS or Atom start */
+  const rssStart = lower.indexOf("<rss");
+  const feedStart = lower.indexOf("<feed");
+  let start = -1;
+  let endTag = "";
+
+  if (rssStart !== -1 && (feedStart === -1 || rssStart < feedStart)) {
+    start = rssStart;
+    endTag = "</rss>";
+  } else if (feedStart !== -1) {
+    start = feedStart;
+    endTag = "</feed>";
+  }
+
+  if (start === -1) return "";
+
+  const end = lower.lastIndexOf(endTag);
+  if (end === -1) return text.slice(start);
+
+  return text.slice(start, end + endTag.length);
+}
+
+/* -----------------------------
+   Parse RSS and Atom
+   Output: [{title, link, pubDate, source}]
+   ----------------------------- */
+function parseFeedXml(xmlText, sourceName) {
+  const doc = new DOMParser().parseFromString(xmlText, "text/xml");
+  if (doc.querySelector("parsererror")) return [];
+
+  const out = [];
+
+  /* RSS */
+  const items = Array.from(doc.querySelectorAll("item"));
+  for (const it of items) {
+    const title = (it.querySelector("title")?.textContent || "").trim();
+
+    let link = (it.querySelector("link")?.textContent || "").trim();
+    if (!link) {
+      const guid = it.querySelector("guid");
+      const isPermalink = (guid?.getAttribute("isPermaLink") || "").toLowerCase() === "true";
+      if (isPermalink) link = (guid?.textContent || "").trim();
+    }
+
+    const pubDate =
+      (it.querySelector("pubDate")?.textContent || "").trim() ||
+      (it.querySelector("dc\\:date")?.textContent || "").trim() ||
+      "";
+
+    if (title && link) out.push({ title, link, pubDate, source: sourceName });
+  }
+
+  /* Atom */
+  const entries = Array.from(doc.querySelectorAll("entry"));
+  for (const e of entries) {
+    const title = (e.querySelector("title")?.textContent || "").trim();
+
+    let link = "";
+    const linkEl = e.querySelector('link[rel="alternate"]') || e.querySelector("link");
+    if (linkEl) link = (linkEl.getAttribute("href") || "").trim();
+
+    const pubDate =
+      (e.querySelector("updated")?.textContent || "").trim() ||
+      (e.querySelector("published")?.textContent || "").trim() ||
+      "";
+
+    if (title && link) out.push({ title, link, pubDate, source: sourceName });
+  }
+
   return out;
 }
 
+/* -----------------------------
+   Dedupe and sorting helpers
+   ----------------------------- */
+function normalizeTitle(t) {
+  return t.toLowerCase().replace(/\s+/g, " ").replace(/[“”"']/g, "").trim();
+}
+function dedupe(items) {
+  const seen = new Set();
+  const out = [];
+  for (const it of items) {
+    const key = normalizeTitle(it.title);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(it);
+  }
+  return out;
+}
+function safeTime(s) {
+  const t = Date.parse(s);
+  return Number.isFinite(t) ? t : 0;
+}
+
+/* -----------------------------
+   Build the marquee DOM
+   - Creates one run of items then appends a clone for seamless looping.
+   ----------------------------- */
 function buildMarquee(items) {
   marqueeEl.innerHTML = "";
-
-  if (!items.length) {
-    showStatus("No headlines available");
-    return;
-  }
-  hideStatus();
 
   for (const h of items) {
     const span = document.createElement("span");
@@ -200,7 +324,10 @@ function buildMarquee(items) {
 
     const a = document.createElement("a");
     a.href = h.link;
-    a.target = "_self";
+
+    /* Do not navigate the iframe page away */
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
 
     const title = document.createElement("span");
     title.className = "title";
@@ -210,6 +337,7 @@ function buildMarquee(items) {
     span.appendChild(dot);
     span.appendChild(src);
     span.appendChild(a);
+
     marqueeEl.appendChild(span);
   }
 
@@ -218,12 +346,15 @@ function buildMarquee(items) {
   marqueeEl.appendChild(clone);
 }
 
+/* -----------------------------
+   Scroll animation
+   ----------------------------- */
 let animId = null;
 let x = 0;
 let lastTs = null;
 
 function startScroll() {
-  cancelAnimationFrame(animId);
+  if (animId) cancelAnimationFrame(animId);
   x = 0;
   lastTs = null;
 
@@ -234,8 +365,8 @@ function startScroll() {
 
     x -= SPEED_PX_PER_SEC * dt;
 
-    const contentWidth = marqueeEl.scrollWidth / 2;
-    if (contentWidth > 0 && Math.abs(x) >= contentWidth) x = 0;
+    const cycleWidth = marqueeEl.scrollWidth / 2;
+    if (cycleWidth > 0 && Math.abs(x) >= cycleWidth) x = 0;
 
     marqueeEl.style.transform = "translateX(" + x + "px)";
     animId = requestAnimationFrame(step);
@@ -244,26 +375,109 @@ function startScroll() {
   animId = requestAnimationFrame(step);
 }
 
-async function refresh() {
-  showStatus("Loading headlines...");
+/* -----------------------------
+   Cache helpers
+   ----------------------------- */
+function saveCache(items) {
   try {
-    const results = await Promise.allSettled(FEEDS.map(fetchFeed));
-    let items = [];
-    for (const r of results) {
-      if (r.status === "fulfilled") items = items.concat(r.value);
-    }
-
-    items = dedupeByTitle(items);
-    items.sort((a, b) => (Date.parse(b.pubDate) || 0) - (Date.parse(a.pubDate) || 0));
-    items = items.slice(0, MAX_ITEMS);
-
-    buildMarquee(items);
-    startScroll();
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), items }));
+  } catch (e) {}
+}
+function loadCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || !Array.isArray(obj.items)) return null;
+    return obj.items;
   } catch (e) {
-    showStatus("Failed to load headlines");
+    return null;
   }
 }
 
+/* -----------------------------
+   Fetch one feed using multiple candidates
+   Returns { items, errors } so we can debug.
+   ----------------------------- */
+async function fetchFeed(feed) {
+  const candidates = proxyCandidates(feed.url);
+  const errors = [];
+
+  for (const u of candidates) {
+    try {
+      const text = await fetchText(u, 9000);
+
+      /* Pull XML out if the proxy added wrapper text */
+      const xml = extractXmlMaybe(text) || text;
+
+      const items = parseFeedXml(xml, feed.name);
+      if (items.length) return { items, errors };
+
+      errors.push(feed.name + " parse-empty via " + short(u));
+    } catch (e) {
+      errors.push(feed.name + " " + String(e.message || e) + " via " + short(u));
+    }
+  }
+
+  return { items: [], errors };
+}
+
+function short(u) {
+  try {
+    const url = new URL(u);
+    return url.host;
+  } catch (e) {
+    return "url";
+  }
+}
+
+/* -----------------------------
+   Main refresh
+   ----------------------------- */
+async function refresh() {
+  showStatus("Loading headlines...");
+
+  const results = await Promise.allSettled(FEEDS.map(fetchFeed));
+
+  let items = [];
+  let errors = [];
+
+  for (const r of results) {
+    if (r.status === "fulfilled") {
+      items = items.concat(r.value.items);
+      errors = errors.concat(r.value.errors);
+    }
+  }
+
+  items = dedupe(items);
+  items.sort((a, b) => safeTime(b.pubDate) - safeTime(a.pubDate));
+  items = items.slice(0, MAX_ITEMS);
+
+  /* If nothing loaded, use cache, else show debug errors */
+  if (!items.length) {
+    const cached = loadCache();
+    if (cached && cached.length) {
+      buildMarquee(cached);
+      startScroll();
+      showStatus("Using cached headlines");
+      return;
+    }
+
+    if (DEBUG && errors.length) {
+      showStatus("No headlines. Last errors: " + errors.slice(0, 3).join(" | "));
+    } else {
+      showStatus("No headlines available");
+    }
+    return;
+  }
+
+  hideStatus();
+  buildMarquee(items);
+  startScroll();
+  saveCache(items);
+}
+
+/* Start now and refresh periodically */
 refresh();
 setInterval(refresh, REFRESH_MINUTES * 60 * 1000);
 </script>
