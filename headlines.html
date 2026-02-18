@@ -3,21 +3,15 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Headlines Rev5</title>
+<title>Headlines Rev6</title>
 
 <style>
-/* =========================================================
-   Headlines ticker Rev4
-   Goal: stop "No headlines available" by being much more robust.
-   ========================================================= */
-
-/* Visual controls */
 :root{
-  --fontSize: 46px;     /* headline font size */
-  --sourceSize: 30px;   /* source label font size */
-  --gap: 30px;          /* spacing between items */
-  --dotSize: 8px;       /* dot size */
-  --padX: 14px;         /* left/right padding */
+  --fontSize: 42px;
+  --sourceSize: 30px;
+  --gap: 30px;
+  --dotSize: 8px;
+  --padX: 14px;
 }
 
 html, body {
@@ -35,31 +29,35 @@ html, body {
   width: 100%;
   display: flex;
   align-items: center;
-  background: #000;
+  background: #000000;
   color: #fff;
 }
 
+/* KEY CHANGE: flex centering container */
 .track {
   position: relative;
   flex: 1 1 auto;
   height: 100%;
+  display: flex;                 /* added */
+  align-items: center;           /* added */
   overflow: hidden;
   padding: 0 var(--padX);
   box-sizing: border-box;
 }
 
-/* Scrolling content container */
+/* Scrolling content */
 .marquee {
   position: absolute;
+  left: 0;
   white-space: nowrap;
   will-change: transform;
-  line-height: 1;
   display: inline-flex;
   align-items: center;
   gap: var(--gap);
   padding-left: 100%;
 }
 
+/* Ensure items are vertically centered */
 .item {
   display: inline-flex;
   align-items: center;
@@ -86,12 +84,13 @@ html, body {
   font-size: var(--fontSize);
 }
 
-/* Status overlay (loading, errors, debug) */
+/* Status overlay matches same centering */
 .status {
   position: absolute;
   inset: 0;
   display: none;
   align-items: center;
+  justify-content: flex-start;   /* same left padding feel */
   padding: 0 var(--padX);
   color: #f0f0f0;
   font-size: calc(var(--fontSize) - 12px);
@@ -99,6 +98,8 @@ html, body {
 
 a { color: inherit; text-decoration: none; }
 </style>
+
+
 </head>
 
 <body>
@@ -131,7 +132,7 @@ a { color: inherit; text-decoration: none; }
 /* -----------------------------
    Tuning
    ----------------------------- */
-const SPEED_PX_PER_SEC = 70;
+const SPEED_PX_PER_SEC = 80;
 const MAX_ITEMS = 12;
 const REFRESH_MINUTES = 10;
 
