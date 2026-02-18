@@ -10,27 +10,30 @@ html, body {
   margin: 0;
   width: 100%;
   height: 100%;
-  background: #00F;
+  background: #000;
   overflow: hidden;
 }
 
-:root {
-  --r2h: calc(100vw * 9 / 48); /* 3 across */
-  --r3h: calc(100vw * 9 / 64); /* 4 across */
-  --r4h: calc(100vw * 9 / 64); /* 4 across */
+:root{
+  --vh: 100dvh;
 
-  --r1ah: calc((100vh - var(--r2h) - var(--r3h) - var(--r4h)) * 0.4);
-  --r1bh: calc((100vh - var(--r2h) - var(--r3h) - var(--r4h)) * 0.6);
+  --r2h: calc(100vw * 9 / 48);
+  --r3h: calc(100vw * 9 / 64);
+  --r4h: calc(100vw * 9 / 64);
+
+  --r1rem: calc(var(--vh) - var(--r2h) - var(--r3h) - var(--r4h));
+  --r1ah: calc(var(--r1rem) * 0.7);
+  --r1bh: calc(var(--r1rem) * 0.3);
 }
 
-.grid {
+.grid{
   width: 100vw;
-  height: 100vh;
+  height: var(--vh);
   display: grid;
   grid-template-rows: var(--r1ah) var(--r1bh) var(--r2h) var(--r3h) var(--r4h);
   grid-template-columns: repeat(12, 1fr);
   gap: 0;
-  background: #0f0;
+  background: #000;
 }
 
 .tile {
@@ -51,8 +54,6 @@ html, body {
 
 <script>
   const URLS = {
-    URL1: "https://solutionssquad.github.io/shulboard/ticker.html",
-
     URL2: "https://solutionssquad.github.io/shulboard/livenow.html",
     URL3: "https://solutionssquad.github.io/shulboard/wsvn.html",
     URL4: "https://solutionssquad.github.io/shulboard/player.html?ID=ABC2&src=https%3A%2F%2Fabcnews-streams.akamaized.net%2Fhls%2Flive%2F2023561%2Fabcnewshudson2%2Fmaster.m3u8&fit=contain&muted=1&reload=60",
@@ -76,165 +77,31 @@ html, body {
     });
   });
 </script>
-
 </head>
 
 <body>
 <div class="grid">
-
-  <!-- Row 1A: ticker -->
   <div class="tile" style="grid-row:1; grid-column:1 / span 12;">
     <iframe src="https://solutionssquad.github.io/shulboard/ticker.html"></iframe>
   </div>
 
-  <!-- Row 1B: headlines -->
   <div class="tile" style="grid-row:2; grid-column:1 / span 12;">
-    <iframe src="https://solutionssquad.github.io/shulboard/headlines.html"></iframe>
+    <iframe src="https://aol.com"></iframe>
   </div>
 
-  <!-- Row 2: 3 videos (unchanged) -->
-  <div class="tile" style="grid-row:3; grid-column:1 / span 4;">
-    <iframe data-src="URL2"></iframe>
-  </div>
-  <div class="tile" style="grid-row:3; grid-column:5 / span 4;">
-    <iframe data-src="URL3"></iframe>
-  </div>
-  <div class="tile" style="grid-row:3; grid-column:9 / span 4;">
-    <iframe data-src="URL4"></iframe>
-  </div>
+  <div class="tile" style="grid-row:3; grid-column:1 / span 4;"><iframe data-src="URL2"></iframe></div>
+  <div class="tile" style="grid-row:3; grid-column:5 / span 4;"><iframe data-src="URL3"></iframe></div>
+  <div class="tile" style="grid-row:3; grid-column:9 / span 4;"><iframe data-src="URL4"></iframe></div>
 
-  <!-- Row 3: 4 videos (unchanged) -->
   <div class="tile" style="grid-row:4; grid-column:1 / span 3;"><iframe data-src="URL5"></iframe></div>
   <div class="tile" style="grid-row:4; grid-column:4 / span 3;"><iframe data-src="URL6"></iframe></div>
   <div class="tile" style="grid-row:4; grid-column:7 / span 3;"><iframe data-src="URL7"></iframe></div>
   <div class="tile" style="grid-row:4; grid-column:10 / span 3;"><iframe data-src="URL8"></iframe></div>
 
-  <!-- Row 4: 4 videos (unchanged) -->
   <div class="tile" style="grid-row:5; grid-column:1 / span 3;"><iframe data-src="URL9"></iframe></div>
   <div class="tile" style="grid-row:5; grid-column:4 / span 3;"><iframe data-src="URL10"></iframe></div>
   <div class="tile" style="grid-row:5; grid-column:7 / span 3;"><iframe data-src="URL11"></iframe></div>
   <div class="tile" style="grid-row:5; grid-column:10 / span 3;"><iframe data-src="URL12"></iframe></div>
-
-</div>
-</body>
-</html>
-<!doctype html>
-<html>
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Wallboard demo2</title>
-
-<style>
-html, body {
-  margin: 0;
-  width: 100%;
-  height: 100%;
-  background: #00F;
-  overflow: hidden;
-}
-
-:root {
-  --r2h: calc(100vw * 9 / 48); /* 3 across */
-  --r3h: calc(100vw * 9 / 64); /* 4 across */
-  --r4h: calc(100vw * 9 / 64); /* 4 across */
-
-  --r1ah: calc((100vh - var(--r2h) - var(--r3h) - var(--r4h)) * 0.22);
-  --r1bh: calc((100vh - var(--r2h) - var(--r3h) - var(--r4h)) * 0.78);
-}
-
-.grid {
-  width: 100vw;
-  height: 100vh;
-  display: grid;
-  grid-template-rows: var(--r1ah) var(--r1bh) var(--r2h) var(--r3h) var(--r4h);
-  grid-template-columns: repeat(12, 1fr);
-  gap: 0;
-  background: #0f0;
-}
-
-.tile {
-  overflow: hidden;
-  background: #000;
-  min-width: 0;
-  min-height: 0;
-}
-
-.tile iframe {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  display: block;
-  background: #000;
-}
-</style>
-
-<script>
-  const URLS = {
-    URL1: "https://solutionssquad.github.io/shulboard/ticker.html",
-
-    URL2: "https://solutionssquad.github.io/shulboard/livenow.html",
-    URL3: "https://solutionssquad.github.io/shulboard/wsvn.html",
-    URL4: "https://solutionssquad.github.io/shulboard/player.html?ID=ABC2&src=https%3A%2F%2Fabcnews-streams.akamaized.net%2Fhls%2Flive%2F2023561%2Fabcnewshudson2%2Fmaster.m3u8&fit=contain&muted=1&reload=60",
-
-    URL5: "https://solutionssquad.github.io/shulboard/player.html?ID=IL13&src=https%3A%2F%2Fd2xg1g9o5vns8m.cloudfront.net%2Fout%2Fv1%2F66d4ac8748ce4a9298b4e40e48d1ae2f%2Findex.m3u8&fit=contain&muted=1&reload=60",
-    URL6: "https://solutionssquad.github.io/shulboard/player.html?ID=i24&src=https%3A%2F%2Ffastly.live.brightcove.com%2F6386790908112%2Feu-central-1%2F5377161796001%2FeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJob3N0IjoiZXJmajYzLmVncmVzcy53YzQ3bTEiLCJhY2NvdW50X2lkIjoiNTM3NzE2MTc5NjAwMSIsImVobiI6ImZhc3RseS5saXZlLmJyaWdodGNvdmUuY29tIiwiaXNzIjoiYmxpdmUtcGxheWJhY2stc291cmNlLWFwaSIsInN1YiI6InBhdGhtYXB0b2tlbiIsImF1ZCI6WyI1Mzc3MTYxNzk2MDAxIl0sImp0aSI6IjYzODY3OTA5MDgxMTIifQ._w5c3EwfnEecDCEpDaKuVz07uuEyUb3vXvQN3svv-oU%2Fchunklist.m3u8&fit=contain&muted=1&reload=60",
-    URL7: "https://solutionssquad.github.io/shulboard/player.html?ID=RT&src=https%3A%2F%2Frt-glb.rttv.com%2Fdvr%2Frtnews%2Fplaylist.m3u8&fit=contain&muted=1&reload=60",
-    URL8: "https://solutionssquad.github.io/shulboard/player.html?ID=Skynews&src=https%3A%2F%2Flinear417-gb-hls1-prd-ak.cdn.skycdp.com%2F100e%2FContent%2FHLS_001_1080_30%2FLive%2Fchannel%28skynews%29%2Findex_1080-30.m3u8&fit=contain&muted=1&reload=60",
-
-    URL9:  "https://solutionssquad.github.io/shulboard/player.html?ID=ABC3&src=https%3A%2F%2Fabcnews-streams.akamaized.net%2Fhls%2Flive%2F2023562%2Fabcnewshudson3%2Fmaster.m3u8&fit=contain&muted=1&reload=60",
-    URL10: "https://solutionssquad.github.io/shulboard/player.html?ID=ABC8&src=https%3A%2F%2Fabcnews-streams.akamaized.net%2Fhls%2Flive%2F2023567%2Fabcnewshudson8%2Fmaster.m3u8&fit=contain&muted=1&reload=60",
-    URL11: "https://solutionssquad.github.io/shulboard/player.html?ID=GlobalNews&src=https%3A%2F%2Flive.corusdigitaldev.com%2Fgroupd%2Flive%2F49a91e7f-1023-430f-8d66-561055f3d0f7%2Flive.isml%2Flive-audio_1%3D96000-video%3D2499968.m3u8&fit=contain&muted=1&reload=60",
-    URL12: "https://solutionssquad.github.io/shulboard/player.html?ID=AlJazeera&src=https%3A%2F%2Flive-hls-web-aje-gcp.thehlive.com%2FAJE%2F03.m3u8&fit=contain&muted=1&reload=60"
-  };
-
-  window.addEventListener("DOMContentLoaded", () => {
-    document.querySelectorAll("iframe[data-src]").forEach((f) => {
-      const key = f.getAttribute("data-src");
-      const url = URLS[key];
-      f.src = url ? url : "about:blank";
-    });
-  });
-</script>
-
-</head>
-
-<body>
-<div class="grid">
-
-  <!-- Row 1A: ticker -->
-  <div class="tile" style="grid-row:1; grid-column:1 / span 12;">
-    <iframe src="https://solutionssquad.github.io/shulboard/ticker.html"></iframe>
-  </div>
-
-  <!-- Row 1B: headlines -->
-  <div class="tile" style="grid-row:2; grid-column:1 / span 12;">
-    <iframe src="https://solutionssquad.github.io/shulboard/headlines.html"></iframe>
-  </div>
-
-  <!-- Row 2: 3 videos (unchanged) -->
-  <div class="tile" style="grid-row:3; grid-column:1 / span 4;">
-    <iframe data-src="URL2"></iframe>
-  </div>
-  <div class="tile" style="grid-row:3; grid-column:5 / span 4;">
-    <iframe data-src="URL3"></iframe>
-  </div>
-  <div class="tile" style="grid-row:3; grid-column:9 / span 4;">
-    <iframe data-src="URL4"></iframe>
-  </div>
-
-  <!-- Row 3: 4 videos (unchanged) -->
-  <div class="tile" style="grid-row:4; grid-column:1 / span 3;"><iframe data-src="URL5"></iframe></div>
-  <div class="tile" style="grid-row:4; grid-column:4 / span 3;"><iframe data-src="URL6"></iframe></div>
-  <div class="tile" style="grid-row:4; grid-column:7 / span 3;"><iframe data-src="URL7"></iframe></div>
-  <div class="tile" style="grid-row:4; grid-column:10 / span 3;"><iframe data-src="URL8"></iframe></div>
-
-  <!-- Row 4: 4 videos (unchanged) -->
-  <div class="tile" style="grid-row:5; grid-column:1 / span 3;"><iframe data-src="URL9"></iframe></div>
-  <div class="tile" style="grid-row:5; grid-column:4 / span 3;"><iframe data-src="URL10"></iframe></div>
-  <div class="tile" style="grid-row:5; grid-column:7 / span 3;"><iframe data-src="URL11"></iframe></div>
-  <div class="tile" style="grid-row:5; grid-column:10 / span 3;"><iframe data-src="URL12"></iframe></div>
-
 </div>
 </body>
 </html>
