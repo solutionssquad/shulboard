@@ -1,0 +1,660 @@
+<!--
+  Market Ticker (single-file web app)
+  Purpose: A self-contained, free, kiosk-friendly scrolling ticker for stocks, indices, and crypto.
+
+  IMPORTANT REALITY CHECK (no accounts, no keys, browser-only):
+  - Most stock market data APIs require an API key, or they block browser CORS requests.
+  - This file uses:
+      1) Stooq (CSV endpoints) for stocks + indices (no key). Example quote endpoint format is documented by Stooq itself. https://stooq.com/q/l/?e=csv&f=sd2t2ohlcv&h=&s=f.us  (CSV example)  :contentReference[oaicite:0]{index=0}
+         Historical CSV pages are available from Stooq (used for mini charts). :contentReference[oaicite:1]{index=1}
+      2) Coinbase public APIs for crypto spot + candles (no key). Coinbase documents CORS support and public price endpoints. :contentReference[oaicite:2]{index=2}
+
+  - If Stooq blocks CORS in your environment, the stock/index calls will fail in the browser.
+    In that case, the only truly robust fix is a tiny server-side proxy you host (free on many platforms),
+    or switching to a provider that supports browser CORS without keys (rare for stocks).
+    This app shows a clear error badge if a source is blocked.
+
+  Hosting (GitHub Pages):
+  1) Create a repo, add this file as ticker.html
+  2) Enable GitHub Pages for the repo (Settings -> Pages)
+  3) Your URL becomes: https://<user>.github.io/<repo>/ticker.html
+
+  Yodeck:
+  - Add a "Web Page" app, paste the GitHub Pages URL.
+  - Place it in a horizontal zone at the top.
+  - Recommended: disable interactions, enable refresh every few minutes (or let this page auto-refresh data).
+
+  Configuration:
+  - Edit the CONFIG section below: symbols, speed, refresh interval, height.
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Market Ticker</title>
+  <style>
+    :root{
+      --ticker-height: 92px;          /* adjust for your Yodeck zone */
+      --bg: #0b0f14;
+      --fg: #e8eef6;
+      --muted: #9fb0c3;
+      --up: #22c55e;
+      --down: #ef4444;
+      --flat: #94a3b8;
+      --border: rgba(255,255,255,.10);
+      --item-gap: 28px;
+      --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+
+    html, body { height: 100%; }
+    body{
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font);
+      overflow: hidden;
+    }
+
+    /* Full-width ticker bar */
+    #tickerBar{
+      height: var(--ticker-height);
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      box-sizing: border-box;
+      padding: 10px 14px;
+    }
+
+    #leftBadge{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-right: 14px;
+      margin-right: 14px;
+      border-right: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    #statusDot{
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--flat);
+      box-shadow: 0 0 0 2px rgba(255,255,255,.06);
+    }
+
+    #statusText{
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* Scrolling region */
+    #scrollWindow{
+      position: relative;
+      flex: 1;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* We create a belt that slides left */
+    .belt{
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--item-gap);
+      white-space: nowrap;
+      will-change: transform;
+    }
+
+    .item{
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 14px;
+      background: rgba(255,255,255,.03);
+    }
+
+    .symBlock{
+      display: flex;
+      flex-direction: column;
+      line-height: 1.05;
+      min-width: 88px;
+    }
+
+    .symbol{
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: .2px;
+    }
+
+    .label{
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .priceBlock{
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      line-height: 1.05;
+      min-width: 120px;
+    }
+
+    .priceRow{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .chgRow{
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .arrow{
+      width: 16px;
+      height: 16px;
+      display: inline-block;
+    }
+
+    .spark{
+      width: 92px;
+      height: 26px;
+      display: block;
+      border-radius: 6px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    .errPill{
+      display: none;
+      margin-left: 10px;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(239,68,68,.35);
+      color: #fecaca;
+      background: rgba(239,68,68,.12);
+      white-space: nowrap;
+    }
+
+    /* Accessibility: reduce motion */
+    @media (prefers-reduced-motion: reduce){
+      .belt{ transform: none !important; }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="tickerBar">
+    <div id="leftBadge">
+      <div id="statusDot"></div>
+      <div>
+        <div style="font-weight:700; font-size:14px;">Markets</div>
+        <div id="statusText">Loading...</div>
+      </div>
+      <div id="errPill" class="errPill"></div>
+    </div>
+
+    <div id="scrollWindow">
+      <div id="beltA" class="belt"></div>
+      <div id="beltB" class="belt"></div>
+    </div>
+  </div>
+
+  <script>
+    /******************************************************************
+     * CONFIG
+     ******************************************************************/
+    const CONFIG = {
+      // Scroll speed in pixels per second.
+      speedPxPerSec: 140,
+
+      // Refresh interval for re-pulling data (ms).
+      refreshMs: 60_000,
+
+      // Stooq: stocks + indices. Symbols are Stooq format (examples: AAPL.US, MSFT.US, ^SPX, ^NDQ).
+      // Note: Stooq indices typically use caret like ^SPX. The historical download page shows ^SPX exists. :contentReference[oaicite:3]{index=3}
+      stocksAndIndices: [
+        { symbol: "AAPL.US", label: "Apple" },
+        { symbol: "MSFT.US", label: "Microsoft" },
+        { symbol: "^SPX",   label: "S&P 500" },
+        { symbol: "^NDQ",   label: "Nasdaq 100" }
+      ],
+
+      // Crypto via Coinbase spot and candles.
+      // Spot price endpoint is public and requires no auth. :contentReference[oaicite:4]{index=4}
+      // Candles endpoint documented here. :contentReference[oaicite:5]{index=5}
+      crypto: [
+        { symbol: "BTC-USD", label: "Bitcoin", productId: "BTC-USD" },
+        { symbol: "ETH-USD", label: "Ethereum", productId: "ETH-USD" },
+        { symbol: "SOL-USD", label: "Solana", productId: "SOL-USD" }
+      ],
+
+      // How many points to draw in the sparkline.
+      sparkPoints: 40
+    };
+
+    /******************************************************************
+     * DATA SOURCES (no keys)
+     ******************************************************************/
+    const SOURCES = {
+      // Stooq quote CSV example format (fields: Symbol,Date,Time,Open,High,Low,Close,Volume). :contentReference[oaicite:6]{index=6}
+      stooqQuoteCsv(symbol){
+        // The "h" param includes header; "e=csv" ensures CSV.
+        return `https://stooq.com/q/l/?s=${encodeURIComponent(symbol)}&f=sd2t2ohlcv&h&e=csv`;
+      },
+
+      // Stooq historical data CSV download endpoint is used widely (pandas-datareader supports Stooq). :contentReference[oaicite:7]{index=7}
+      // i=d means daily bars.
+      stooqHistoryCsv(symbol){
+        return `https://stooq.com/q/d/l/?s=${encodeURIComponent(symbol)}&i=d`;
+      },
+
+      // Coinbase spot price (public, no auth). :contentReference[oaicite:8]{index=8}
+      coinbaseSpot(symbol){
+        return `https://api.coinbase.com/v2/prices/${encodeURIComponent(symbol)}/spot`;
+      },
+
+      // Coinbase Exchange candles endpoint (public). :contentReference[oaicite:9]{index=9}
+      // granularity in seconds: 3600 for 1h.
+      coinbaseCandles(productId, granularitySec=3600){
+        return `https://api.exchange.coinbase.com/products/${encodeURIComponent(productId)}/candles?granularity=${granularitySec}`;
+      }
+    };
+
+    /******************************************************************
+     * HELPERS
+     ******************************************************************/
+    function fmtNumber(x, decimals=2){
+      if (!isFinite(x)) return "—";
+      return x.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    }
+
+    function fmtSigned(x, decimals=2){
+      if (!isFinite(x)) return "—";
+      const s = x >= 0 ? "+" : "";
+      return s + fmtNumber(x, decimals);
+    }
+
+    function pickDecimals(price){
+      if (!isFinite(price)) return 2;
+      if (price >= 1000) return 2;
+      if (price >= 100) return 2;
+      if (price >= 1) return 2;
+      return 4;
+    }
+
+    function parseCsv(text){
+      // Minimal CSV parsing for simple Stooq CSV responses (no quoted commas expected here).
+      const lines = text.trim().split(/\r?\n/);
+      if (lines.length < 2) return [];
+      const headers = lines[0].split(",").map(s => s.trim());
+      return lines.slice(1).map(line => {
+        const cols = line.split(",").map(s => s.trim());
+        const row = {};
+        headers.forEach((h, i) => row[h] = cols[i]);
+        return row;
+      });
+    }
+
+    function setStatus(okCount, total, lastUpdated){
+      const dot = document.getElementById("statusDot");
+      const txt = document.getElementById("statusText");
+      const err = document.getElementById("errPill");
+
+      const allOk = okCount === total;
+      const noneOk = okCount === 0;
+
+      dot.style.background = allOk ? "var(--up)" : (noneOk ? "var(--down)" : "var(--flat)");
+      txt.textContent = `Updated ${lastUpdated} • ${okCount}/${total} sources OK`;
+
+      if (allOk){
+        err.style.display = "none";
+      } else {
+        err.style.display = "inline-flex";
+        err.textContent = "Some sources blocked or failed (often CORS).";
+      }
+    }
+
+    function upDownFlat(change){
+      if (!isFinite(change) || change === 0) return "flat";
+      return change > 0 ? "up" : "down";
+    }
+
+    function arrowSvg(dir){
+      const color = dir === "up" ? "var(--up)" : (dir === "down" ? "var(--down)" : "var(--flat)");
+      if (dir === "up"){
+        return `<svg class="arrow" viewBox="0 0 24 24" fill="none"><path d="M12 5l7 7h-4v7H9v-7H5l7-7z" fill="${color}"/></svg>`;
+      }
+      if (dir === "down"){
+        return `<svg class="arrow" viewBox="0 0 24 24" fill="none"><path d="M12 19l-7-7h4V5h6v7h4l-7 7z" fill="${color}"/></svg>`;
+      }
+      return `<svg class="arrow" viewBox="0 0 24 24" fill="none"><path d="M5 12h14v2H5z" fill="${color}"/></svg>`;
+    }
+
+    function drawSpark(canvas, values, dir){
+      const ctx = canvas.getContext("2d");
+      const w = canvas.width = canvas.clientWidth;
+      const h = canvas.height = canvas.clientHeight;
+
+      ctx.clearRect(0,0,w,h);
+
+      if (!values || values.length < 2){
+        // faint placeholder line
+        ctx.globalAlpha = 0.35;
+        ctx.strokeStyle = "rgba(255,255,255,.35)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, h/2);
+        ctx.lineTo(w, h/2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        return;
+      }
+
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const span = (max - min) || 1;
+
+      // Color by direction
+      const stroke = dir === "up" ? getCss("--up") : (dir === "down" ? getCss("--down") : getCss("--flat"));
+
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = stroke;
+      ctx.beginPath();
+
+      for (let i=0; i<values.length; i++){
+        const x = (i/(values.length-1)) * (w-2) + 1;
+        const y = h - (((values[i]-min)/span) * (h-4) + 2);
+        if (i === 0) ctx.moveTo(x,y);
+        else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+
+    function getCss(varName){
+      return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    }
+
+    async function safeFetchText(url){
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.text();
+    }
+
+    async function safeFetchJson(url){
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    }
+
+    /******************************************************************
+     * LOADERS
+     ******************************************************************/
+    async function loadStooqInstrument(inst){
+      // Returns: { symbol, label, price, change, pct, spark[] }
+      // We compute change using last two daily closes from historical CSV.
+      const quoteUrl = SOURCES.stooqQuoteCsv(inst.symbol);
+      const histUrl  = SOURCES.stooqHistoryCsv(inst.symbol);
+
+      const [quoteCsv, histCsv] = await Promise.all([
+        safeFetchText(quoteUrl),
+        safeFetchText(histUrl)
+      ]);
+
+      const qRows = parseCsv(quoteCsv);
+      if (!qRows.length) throw new Error("No quote rows");
+      const q = qRows[0];
+
+      const price = Number(q.Close);
+      const o = Number(q.Open);
+
+      // Historical CSV format: Date,Open,High,Low,Close,Volume (header present).
+      const hRows = parseCsv(histCsv);
+      const closes = hRows.map(r => Number(r.Close)).filter(Number.isFinite);
+
+      // Some Stooq histories are oldest->newest; we want the last two.
+      const last = closes[closes.length - 1];
+      const prev = closes[closes.length - 2];
+
+      let change = NaN, pct = NaN;
+      if (isFinite(last) && isFinite(prev) && prev !== 0){
+        change = last - prev;
+        pct = (change / prev) * 100;
+      } else if (isFinite(price) && isFinite(o) && o !== 0){
+        // Fallback: use open if prev close is unavailable.
+        change = price - o;
+        pct = (change / o) * 100;
+      }
+
+      // Sparkline: last N closes.
+      const n = CONFIG.sparkPoints;
+      const spark = closes.slice(Math.max(0, closes.length - n));
+
+      return { symbol: inst.symbol, label: inst.label, price, change, pct, spark };
+    }
+
+    async function loadCoinbaseCrypto(inst){
+      // Spot price: Coinbase v2
+      const spotUrl = SOURCES.coinbaseSpot(inst.symbol);
+      const spot = await safeFetchJson(spotUrl);
+      const price = Number(spot?.data?.amount);
+
+      // Candles: Coinbase Exchange public endpoint. :contentReference[oaicite:10]{index=10}
+      // Response is an array of [time, low, high, open, close, volume] (common format).
+      // We pull close values and reverse into chronological order.
+      const candlesUrl = SOURCES.coinbaseCandles(inst.productId, 3600);
+      const candles = await safeFetchJson(candlesUrl);
+
+      const closes = Array.isArray(candles)
+        ? candles.map(row => Number(row?.[4])).filter(Number.isFinite).reverse()
+        : [];
+
+      const last = closes[closes.length - 1];
+      const prev = closes[closes.length - 2];
+
+      let change = NaN, pct = NaN;
+      if (isFinite(last) && isFinite(prev) && prev !== 0){
+        change = last - prev;
+        pct = (change / prev) * 100;
+      }
+
+      const spark = closes.slice(Math.max(0, closes.length - CONFIG.sparkPoints));
+
+      return { symbol: inst.symbol, label: inst.label, price: isFinite(price) ? price : last, change, pct, spark };
+    }
+
+    /******************************************************************
+     * RENDER
+     ******************************************************************/
+    function renderItems(items){
+      const beltA = document.getElementById("beltA");
+      const beltB = document.getElementById("beltB");
+
+      beltA.innerHTML = "";
+      beltB.innerHTML = "";
+
+      const frag = document.createDocumentFragment();
+      for (const it of items){
+        frag.appendChild(makeItemNode(it));
+      }
+
+      beltA.appendChild(frag);
+
+      // Duplicate content for seamless loop
+      beltB.innerHTML = beltA.innerHTML;
+
+      // After DOM paints, position belts and start animation loop
+      requestAnimationFrame(() => {
+        layoutBelts();
+        startScrollLoop();
+      });
+    }
+
+    function makeItemNode(it){
+      const dir = upDownFlat(it.change);
+      const dec = pickDecimals(it.price);
+
+      const el = document.createElement("div");
+      el.className = "item";
+
+      el.innerHTML = `
+        <div class="symBlock">
+          <div class="symbol">${escapeHtml(it.symbol)}</div>
+          <div class="label">${escapeHtml(it.label || "")}</div>
+        </div>
+
+        <div class="priceBlock">
+          <div class="priceRow">
+            ${arrowSvg(dir)}
+            <span>${fmtNumber(it.price, dec)}</span>
+          </div>
+          <div class="chgRow">
+            <span style="color:${dir==="up" ? getCss("--up") : (dir==="down" ? getCss("--down") : getCss("--flat"))}; font-weight:700;">
+              ${fmtSigned(it.change, dec)} (${fmtSigned(it.pct, 2)}%)
+            </span>
+          </div>
+        </div>
+
+        <canvas class="spark"></canvas>
+      `;
+
+      const canvas = el.querySelector("canvas.spark");
+      drawSpark(canvas, it.spark, dir);
+
+      return el;
+    }
+
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, c => ({
+        "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+      }[c]));
+    }
+
+    /******************************************************************
+     * SCROLL ENGINE (seamless looping)
+     ******************************************************************/
+    let rafId = null;
+    let lastTs = 0;
+    let offsetX = 0;
+    let beltWidth = 0;
+
+    function layoutBelts(){
+      const beltA = document.getElementById("beltA");
+      const beltB = document.getElementById("beltB");
+
+      // Ensure belts are placed side by side
+      beltWidth = beltA.getBoundingClientRect().width;
+      beltA.style.transform = `translateX(${offsetX}px)`;
+      beltB.style.transform = `translateX(${offsetX + beltWidth}px)`;
+    }
+
+    function startScrollLoop(){
+      if (rafId) cancelAnimationFrame(rafId);
+      lastTs = performance.now();
+
+      const tick = (ts) => {
+        const dt = (ts - lastTs) / 1000;
+        lastTs = ts;
+
+        offsetX -= CONFIG.speedPxPerSec * dt;
+
+        // Wrap when the first belt fully leaves the screen
+        if (-offsetX >= beltWidth){
+          offsetX += beltWidth;
+        }
+
+        const beltA = document.getElementById("beltA");
+        const beltB = document.getElementById("beltB");
+        beltA.style.transform = `translateX(${offsetX}px)`;
+        beltB.style.transform = `translateX(${offsetX + beltWidth}px)`;
+
+        rafId = requestAnimationFrame(tick);
+      };
+
+      rafId = requestAnimationFrame(tick);
+    }
+
+    window.addEventListener("resize", () => layoutBelts());
+
+    /******************************************************************
+     * MAIN LOOP
+     ******************************************************************/
+    async function refresh(){
+      const totalSources = CONFIG.stocksAndIndices.length + CONFIG.crypto.length;
+      let okSources = 0;
+
+      const results = [];
+
+      // Stocks + indices via Stooq
+      const stooqPromises = CONFIG.stocksAndIndices.map(async (inst) => {
+        try{
+          const data = await loadStooqInstrument(inst);
+          okSources += 1;
+          results.push(data);
+        } catch (e){
+          results.push({
+            symbol: inst.symbol,
+            label: inst.label,
+            price: NaN,
+            change: NaN,
+            pct: NaN,
+            spark: []
+          });
+          console.warn("Stooq failed:", inst.symbol, e);
+        }
+      });
+
+      // Crypto via Coinbase
+      const cryptoPromises = CONFIG.crypto.map(async (inst) => {
+        try{
+          const data = await loadCoinbaseCrypto(inst);
+          okSources += 1;
+          results.push(data);
+        } catch (e){
+          results.push({
+            symbol: inst.symbol,
+            label: inst.label,
+            price: NaN,
+            change: NaN,
+            pct: NaN,
+            spark: []
+          });
+          console.warn("Coinbase failed:", inst.symbol, e);
+        }
+      });
+
+      await Promise.allSettled([...stooqPromises, ...cryptoPromises]);
+
+      // Sort to keep your configured ordering: stocks first, then crypto
+      const byOrder = new Map();
+      let idx = 0;
+      for (const s of CONFIG.stocksAndIndices) byOrder.set(s.symbol, idx++);
+      for (const c of CONFIG.crypto) byOrder.set(c.symbol, idx++);
+      results.sort((a,b) => (byOrder.get(a.symbol) ?? 999) - (byOrder.get(b.symbol) ?? 999));
+
+      renderItems(results);
+
+      const now = new Date();
+      const lastUpdated = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      setStatus(okSources, totalSources, lastUpdated);
+    }
+
+    // Kick off
+    refresh();
+    setInterval(refresh, CONFIG.refreshMs);
+  </script>
+</body>
+</html>
