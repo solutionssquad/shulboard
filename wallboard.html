@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Wallboard demo1</title>
+<title>Wallboard demo2</title>
 
 <style>
 html, body {
   margin: 0;
   width: 100%;
   height: 100%;
-  background: #000;
+  background: #00C;
   overflow: hidden;
 }
 
@@ -18,14 +18,16 @@ html, body {
   --r2h: calc(100vw * 9 / 48); /* 3 across */
   --r3h: calc(100vw * 9 / 64); /* 4 across */
   --r4h: calc(100vw * 9 / 64); /* 4 across */
-  --r1h: calc(100vh - var(--r2h) - var(--r3h) - var(--r4h));
+
+  --r1ah: calc((100vh - var(--r2h) - var(--r3h) - var(--r4h)) * 0.3);
+  --r1bh: calc((100vh - var(--r2h) - var(--r3h) - var(--r4h)) * 0.7);
 }
 
 .grid {
   width: 100vw;
   height: 100vh;
   display: grid;
-  grid-template-rows: var(--r1h) var(--r2h) var(--r3h) var(--r4h);
+  grid-template-rows: var(--r1ah) var(--r1bh) var(--r2h) var(--r3h) var(--r4h);
   grid-template-columns: repeat(12, 1fr);
   gap: 0;
   background: #000;
@@ -44,26 +46,6 @@ html, body {
   border: 0;
   display: block;
   background: #000;
-}
-
-/* Row 1 stack must be constrained to the row height */
-.r1stack{
-  width: 100%;
-  height: 100%;
-  display: grid;
-  grid-template-rows: 1fr 2fr; /* top ticker, bottom headlines */
-  gap: 0;
-  overflow: hidden;
-  min-width: 0;
-  min-height: 0;
-}
-
-.r1stack iframe{
-  width: 100%;
-  height: 100%;
-  border: 0;
-  display: block;
-  background: #00f;
 }
 </style>
 
@@ -100,36 +82,38 @@ html, body {
 <body>
 <div class="grid">
 
-  <!-- Row 1: ticker + headlines stacked -->
+  <!-- Row 1A: ticker -->
   <div class="tile" style="grid-row:1; grid-column:1 / span 12;">
-    <div class="r1stack">
-      <iframe src="https://solutionssquad.github.io/shulboard/ticker.html"></iframe>
-      <iframe src="https://solutionssquad.github.io/shulboard/headlines.html"></iframe>
-    </div>
+    <iframe src="https://solutionssquad.github.io/shulboard/ticker.html"></iframe>
   </div>
 
-  <!-- Row 2: 3 videos -->
-  <div class="tile" style="grid-row:2; grid-column:1 / span 4;">
+  <!-- Row 1B: headlines -->
+  <div class="tile" style="grid-row:2; grid-column:1 / span 12;">
+    <iframe src="https://solutionssquad.github.io/shulboard/headlines.html"></iframe>
+  </div>
+
+  <!-- Row 2: 3 videos (unchanged) -->
+  <div class="tile" style="grid-row:3; grid-column:1 / span 4;">
     <iframe data-src="URL2"></iframe>
   </div>
-  <div class="tile" style="grid-row:2; grid-column:5 / span 4;">
+  <div class="tile" style="grid-row:3; grid-column:5 / span 4;">
     <iframe data-src="URL3"></iframe>
   </div>
-  <div class="tile" style="grid-row:2; grid-column:9 / span 4;">
+  <div class="tile" style="grid-row:3; grid-column:9 / span 4;">
     <iframe data-src="URL4"></iframe>
   </div>
 
-  <!-- Row 3: 4 videos -->
-  <div class="tile" style="grid-row:3; grid-column:1 / span 3;"><iframe data-src="URL5"></iframe></div>
-  <div class="tile" style="grid-row:3; grid-column:4 / span 3;"><iframe data-src="URL6"></iframe></div>
-  <div class="tile" style="grid-row:3; grid-column:7 / span 3;"><iframe data-src="URL7"></iframe></div>
-  <div class="tile" style="grid-row:3; grid-column:10 / span 3;"><iframe data-src="URL8"></iframe></div>
+  <!-- Row 3: 4 videos (unchanged) -->
+  <div class="tile" style="grid-row:4; grid-column:1 / span 3;"><iframe data-src="URL5"></iframe></div>
+  <div class="tile" style="grid-row:4; grid-column:4 / span 3;"><iframe data-src="URL6"></iframe></div>
+  <div class="tile" style="grid-row:4; grid-column:7 / span 3;"><iframe data-src="URL7"></iframe></div>
+  <div class="tile" style="grid-row:4; grid-column:10 / span 3;"><iframe data-src="URL8"></iframe></div>
 
-  <!-- Row 4: 4 videos -->
-  <div class="tile" style="grid-row:4; grid-column:1 / span 3;"><iframe data-src="URL9"></iframe></div>
-  <div class="tile" style="grid-row:4; grid-column:4 / span 3;"><iframe data-src="URL10"></iframe></div>
-  <div class="tile" style="grid-row:4; grid-column:7 / span 3;"><iframe data-src="URL11"></iframe></div>
-  <div class="tile" style="grid-row:4; grid-column:10 / span 3;"><iframe data-src="URL12"></iframe></div>
+  <!-- Row 4: 4 videos (unchanged) -->
+  <div class="tile" style="grid-row:5; grid-column:1 / span 3;"><iframe data-src="URL9"></iframe></div>
+  <div class="tile" style="grid-row:5; grid-column:4 / span 3;"><iframe data-src="URL10"></iframe></div>
+  <div class="tile" style="grid-row:5; grid-column:7 / span 3;"><iframe data-src="URL11"></iframe></div>
+  <div class="tile" style="grid-row:5; grid-column:10 / span 3;"><iframe data-src="URL12"></iframe></div>
 
 </div>
 </body>
