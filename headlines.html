@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Headlines Rev9</title>
+<title>Headlines Rev10</title>
 
 <style>
 :root{
   --fontSize: 38px;
   --sourceSize: 18px;
-  --timeSize: 14px;     /* NEW: small timestamp under source */
+  --timeSize: 14px;
   --gap: 30px;
   --dotSize: 8px;
   --padX: 14px;
@@ -45,15 +45,30 @@ html, body {
   box-sizing: border-box;
 }
 
+/* Marquee container that we translate */
 .marquee {
   position: absolute;
   left: 0;
-  white-space: nowrap;
+  top: 50%;
+  transform: translateY(-50%);
   will-change: transform;
   display: inline-flex;
   align-items: center;
+  white-space: nowrap;
+}
+
+/* Two identical runs placed side by side */
+.run {
+  display: inline-flex;
+  align-items: center;
   gap: var(--gap);
-  padding-left: 100%;
+  white-space: nowrap;
+}
+
+/* Small spacer between run1 and run2 to prevent seam overlap */
+.runSpacer {
+  width: var(--gap);
+  flex: 0 0 auto;
 }
 
 .item {
@@ -70,7 +85,6 @@ html, body {
   flex: 0 0 auto;
 }
 
-/* Source + time stacked vertically */
 .sourceBlock {
   display: flex;
   flex-direction: column;
@@ -108,6 +122,7 @@ html, body {
   padding: 0 var(--padX);
   color: #f0f0f0;
   font-size: calc(var(--fontSize) - 12px);
+  pointer-events: none;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -118,45 +133,65 @@ a { color: inherit; text-decoration: none; }
 <div class="bar">
   <div class="track">
     <div id="status" class="status">Loading...</div>
-    <div id="marquee" class="marquee"></div>
+
+    <!-- Marquee structure: two runs so we never rely on scrollWidth/2 -->
+    <div id="marquee" class="marquee" aria-label="Headlines ticker">
+      <div id="run1" class="run"></div>
+      <div class="runSpacer" aria-hidden="true"></div>
+      <div id="run2" class="run" aria-hidden="true"></div>
+    </div>
   </div>
 </div>
 
 <script>
 /* =========================================================
-   Headlines wallboard ticker
-   - Per feed: take latest 3 items
-   - Timestamp under source: "Thu 15:07" (day-of-week + 24h time)
-   ========================================================= */
+   Headlines Rev10
+   Fix for occasional "duplicates scrolling over itself"
 
-/* Tuning */
+   Root cause in Rev9:
+   - It used one container and appended a clone inside it.
+   - The animation assumed scrollWidth/2 is always exactly one cycle.
+   - When fonts load late, content width changes mid-animation.
+   - During refresh, rebuild plus animation frames can momentarily overlap.
+
+   Rev10 fix:
+   - Use two separate sibling runs (run1 and run2).
+   - Measure run1 width and loop cleanly when x <= -run1Width - spacer.
+   - Cancel animation before rebuilding and reset transforms.
+   - Wait for fonts (when available) before measuring to avoid width changes.
+*/
+
+/* -----------------------------
+   Tuning
+   ----------------------------- */
 const SPEED_PX_PER_SEC = 65;
 const PER_FEED_MAX = 3;
-const MAX_ITEMS = 40;          // safety cap after merge
+const MAX_ITEMS = 40;
 const REFRESH_MINUTES = 5;
 const DEBUG = false;
 
 /* Feeds */
 const FEEDS = [
-  { name: "Political Wire",        url: "https://politicalwire.com/feed/" },
-  { name: "BBC",        url: "https://feeds.bbci.co.uk/news/rss.xml" }, 
-  { name: "NBC News",        url: "https://feeds.nbcnews.com/nbcnews/public/news" },
-  { name: "YWN",   url: "https://www.theyeshivaworld.com/article.php/feed" },
+  { name: "Political Wire", url: "https://politicalwire.com/feed/" },
+  { name: "BBC", url: "https://feeds.bbci.co.uk/news/rss.xml" },
+  { name: "NBC News", url: "https://feeds.nbcnews.com/nbcnews/public/news" },
+  { name: "YWN", url: "https://www.theyeshivaworld.com/article.php/feed" },
   { name: "Middle East Eye", url: "https://feeder.co/discover/5c9c89be31/middleeasteye-net-rss" },
-  { name: "Jpost",         url: "https://www.jpost.com/rss/rssfeedsfrontpage.aspx" },
-  { name: "Times of Israel",         url: "https://www.timesofisrael.com/feed/" },
-  { name: "IRNA",         url: "https://en.irna.ir/rss" },
-    { name: "AP",         url: "https://apnews.com/hub/ap-top-news?output=rss" }  
+  { name: "Jpost", url: "https://www.jpost.com/rss/rssfeedsfrontpage.aspx" },
+  { name: "Times of Israel", url: "https://www.timesofisrael.com/feed/" },
+  { name: "IRNA", url: "https://en.irna.ir/rss" },
+  { name: "AP", url: "https://apnews.com/hub/ap-top-news?output=rss" }
 ];
 
-/* Cache key */
-const CACHE_KEY = "headlines_rev9_cache_v1";
+const CACHE_KEY = "headlines_rev10_cache_v1";
 
 /* DOM refs */
 const statusEl = document.getElementById("status");
 const marqueeEl = document.getElementById("marquee");
+const run1El = document.getElementById("run1");
+const run2El = document.getElementById("run2");
 
-/* Status helpers */
+/* Status */
 function showStatus(msg) {
   statusEl.style.display = "flex";
   statusEl.textContent = msg;
@@ -165,7 +200,7 @@ function hideStatus() {
   statusEl.style.display = "none";
 }
 
-/* Proxy candidates */
+/* Proxies */
 function proxyCandidates(originalUrl) {
   const u = encodeURIComponent(originalUrl);
   return [
@@ -278,26 +313,79 @@ function safeTime(s) {
   return Number.isFinite(t) ? t : 0;
 }
 
-/* Timestamp format: "Thu 15:07" (local time, 24h) */
+/* Timestamp: "Thu 15:07" */
 function formatStamp(pubDate) {
   const t = safeTime(pubDate);
   if (!t) return "";
   const d = new Date(t);
-
   const dow = d.toLocaleDateString([], { weekday: "short" });
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
-
   return dow + " " + hh + ":" + mm;
 }
 
-/* Build marquee */
-function buildMarquee(items) {
-  marqueeEl.innerHTML = "";
+/* Cache */
+function saveCache(items) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), items }));
+  } catch (e) {}
+}
+function loadCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || !Array.isArray(obj.items)) return null;
+    return obj.items;
+  } catch (e) {
+    return null;
+  }
+}
+
+/* Feed fetch with per-feed limiting */
+async function fetchFeed(feed) {
+  const candidates = proxyCandidates(feed.url);
+  const errors = [];
+
+  for (const u of candidates) {
+    try {
+      const text = await fetchText(u, 9000);
+      const xml = extractXmlMaybe(text) || text;
+
+      let items = parseFeedXml(xml, feed.name);
+      if (!items.length) {
+        errors.push(feed.name + " parse-empty via " + short(u));
+        continue;
+      }
+
+      items.sort((a, b) => safeTime(b.pubDate) - safeTime(a.pubDate));
+      items = items.slice(0, PER_FEED_MAX);
+
+      return { items, errors };
+    } catch (e) {
+      errors.push(feed.name + " " + String(e.message || e) + " via " + short(u));
+    }
+  }
+
+  return { items: [], errors };
+}
+
+function short(u) {
+  try {
+    return new URL(u).host;
+  } catch (e) {
+    return "url";
+  }
+}
+
+/* Build one run (run1), then clone into run2 as siblings */
+function buildRuns(items) {
+  run1El.innerHTML = "";
+  run2El.innerHTML = "";
 
   for (const h of items) {
-    const span = document.createElement("span");
-    span.className = "item";
+    const item = document.createElement("span");
+    item.className = "item";
 
     const dot = document.createElement("span");
     dot.className = "dot";
@@ -327,104 +415,89 @@ function buildMarquee(items) {
 
     a.appendChild(title);
 
-    span.appendChild(dot);
-    span.appendChild(sourceBlock);
-    span.appendChild(a);
+    item.appendChild(dot);
+    item.appendChild(sourceBlock);
+    item.appendChild(a);
 
-    marqueeEl.appendChild(span);
+    run1El.appendChild(item);
   }
 
-  const clone = marqueeEl.cloneNode(true);
-  clone.id = "";
-  marqueeEl.appendChild(clone);
+  /* Clone run1 into run2 */
+  run2El.appendChild(run1El.cloneNode(true));
 }
 
-/* Scroll animation */
+/* Animation state */
 let animId = null;
 let x = 0;
 let lastTs = null;
+let cycleWidth = 0;
+let isAnimating = false;
 
-function startScroll() {
+/* Ensure we measure after fonts are ready, so width stays stable */
+async function waitForFonts() {
+  if (document.fonts && document.fonts.ready) {
+    try { await document.fonts.ready; } catch (e) {}
+  } else {
+    await new Promise(r => setTimeout(r, 50));
+  }
+}
+
+/* Measure one cycle width: run1 width plus spacer */
+function measureCycleWidth() {
+  const spacer = marqueeEl.querySelector(".runSpacer");
+  const spacerW = spacer ? spacer.getBoundingClientRect().width : 0;
+  const run1W = run1El.getBoundingClientRect().width;
+  cycleWidth = run1W + spacerW;
+}
+
+/* Stop animation cleanly */
+function stopScroll() {
   if (animId) cancelAnimationFrame(animId);
+  animId = null;
+  isAnimating = false;
   x = 0;
   lastTs = null;
+  marqueeEl.style.transform = "translateY(-50%) translateX(0px)";
+}
+
+/* Start animation using measured cycleWidth */
+function startScroll() {
+  stopScroll();
+  if (!cycleWidth || cycleWidth < 10) return;
+
+  isAnimating = true;
 
   function step(ts) {
+    if (!isAnimating) return;
+
     if (lastTs == null) lastTs = ts;
     const dt = (ts - lastTs) / 1000;
     lastTs = ts;
 
     x -= SPEED_PX_PER_SEC * dt;
 
-    const cycleWidth = marqueeEl.scrollWidth / 2;
-    if (cycleWidth > 0 && Math.abs(x) >= cycleWidth) x = 0;
+    /* When the first run has fully moved left, reset to 0 */
+    if (x <= -cycleWidth) x = 0;
 
-    marqueeEl.style.transform = "translateX(" + x + "px)";
+    marqueeEl.style.transform = "translateY(-50%) translateX(" + x + "px)";
     animId = requestAnimationFrame(step);
   }
 
   animId = requestAnimationFrame(step);
 }
 
-/* Cache */
-function saveCache(items) {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), items }));
-  } catch (e) {}
-}
-function loadCache() {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    const obj = JSON.parse(raw);
-    if (!obj || !Array.isArray(obj.items)) return null;
-    return obj.items;
-  } catch (e) {
-    return null;
-  }
-}
-
-/* Fetch one feed with per-feed limiting */
-async function fetchFeed(feed) {
-  const candidates = proxyCandidates(feed.url);
-  const errors = [];
-
-  for (const u of candidates) {
-    try {
-      const text = await fetchText(u, 9000);
-      const xml = extractXmlMaybe(text) || text;
-
-      let items = parseFeedXml(xml, feed.name);
-      if (!items.length) {
-        errors.push(feed.name + " parse-empty via " + short(u));
-        continue;
-      }
-
-      /* newest first, then cap per feed */
-      items.sort((a, b) => safeTime(b.pubDate) - safeTime(a.pubDate));
-      items = items.slice(0, PER_FEED_MAX);
-
-      return { items, errors };
-    } catch (e) {
-      errors.push(feed.name + " " + String(e.message || e) + " via " + short(u));
-    }
-  }
-
-  return { items: [], errors };
-}
-
-function short(u) {
-  try {
-    const url = new URL(u);
-    return url.host;
-  } catch (e) {
-    return "url";
-  }
-}
+/* Re-measure on resize */
+window.addEventListener("resize", () => {
+  if (!run1El.children.length) return;
+  measureCycleWidth();
+});
 
 /* Main refresh */
 async function refresh() {
   showStatus("Refreshing");
+
+  /* Prevent rebuild while animating */
+  stopScroll();
 
   const results = await Promise.allSettled(FEEDS.map(fetchFeed));
 
@@ -445,7 +518,9 @@ async function refresh() {
   if (!items.length) {
     const cached = loadCache();
     if (cached && cached.length) {
-      buildMarquee(cached);
+      buildRuns(cached);
+      await waitForFonts();
+      measureCycleWidth();
       startScroll();
       showStatus("Using cached headlines");
       return;
@@ -460,7 +535,11 @@ async function refresh() {
   }
 
   hideStatus();
-  buildMarquee(items);
+  buildRuns(items);
+
+  /* Wait for fonts then measure and scroll so widths do not change mid-run */
+  await waitForFonts();
+  measureCycleWidth();
   startScroll();
   saveCache(items);
 }
