@@ -131,20 +131,22 @@ a { color: inherit; text-decoration: none; }
 
 /* Tuning */
 const SPEED_PX_PER_SEC = 65;
-const PER_FEED_MAX = 4;
+const PER_FEED_MAX = 3;
 const MAX_ITEMS = 40;          // safety cap after merge
-const REFRESH_MINUTES = 1;
+const REFRESH_MINUTES = 5;
 const DEBUG = false;
 
 /* Feeds */
 const FEEDS = [
   { name: "Political Wire",        url: "https://politicalwire.com/feed/" },
-  /* { name: "BBC",        url: "https://feeds.bbci.co.uk/news/rss.xml" }, */
+  { name: "BBC",        url: "https://feeds.bbci.co.uk/news/rss.xml" }, 
   { name: "NBC News",        url: "https://feeds.nbcnews.com/nbcnews/public/news" },
   { name: "YWN",   url: "https://www.theyeshivaworld.com/article.php/feed" },
   { name: "Middle East Eye", url: "https://feeder.co/discover/5c9c89be31/middleeasteye-net-rss" },
+  { name: "Jpost",         url: "https://www.jpost.com/rss/rssfeedsfrontpage.aspx" },
+  { name: "Times of Israel",         url: "https://www.timesofisrael.com/feed/" },
   { name: "IRNA",         url: "https://en.irna.ir/rss" },
-  { name: "AP",         url: "https://apnews.com/hub/ap-top-news?output=rss" }  
+    { name: "AP",         url: "https://apnews.com/hub/ap-top-news?output=rss" }  
 ];
 
 /* Cache key */
