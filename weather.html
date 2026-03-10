@@ -195,9 +195,7 @@ body{
   font-size:11px;
   font-weight:700;
   color:var(--text);
-  white-space:nowrap;
   overflow:hidden;
-  text-overflow:ellipsis;
 }
 
 .dot{
@@ -207,6 +205,40 @@ body{
   flex:0 0 auto;
   background:var(--green);
   box-shadow:0 0 10px rgba(69,229,154,.6);
+}
+
+.bannerViewport{
+  position:relative;
+  flex:1;
+  min-width:0;
+  overflow:hidden;
+  height:16px;
+  display:flex;
+  align-items:center;
+}
+
+.bannerText{
+  position:absolute;
+  left:0;
+  top:50%;
+  transform:translateY(-50%);
+  white-space:nowrap;
+  will-change:transform;
+}
+
+.bannerText.scroll{
+  animation-name:marqueeScroll;
+  animation-timing-function:linear;
+  animation-iteration-count:infinite;
+}
+
+@keyframes marqueeScroll{
+  0%{
+    transform:translate(0, -50%);
+  }
+  100%{
+    transform:translate(calc(-1 * var(--scroll-distance, 0px)), -50%);
+  }
 }
 
 .chartWrap{
@@ -382,7 +414,9 @@ body{
 
         <div class="banner" id="banner">
           <div class="dot" id="dot"></div>
-          <div id="bannerText">No significant weather concerns in the next 24 hours</div>
+          <div class="bannerViewport" id="bannerViewport">
+            <div class="bannerText" id="bannerText">No significant weather concerns in the next 24 hours</div>
+          </div>
         </div>
       </div>
     </section>
@@ -536,6 +570,28 @@ function bezierPath(points){
   return d;
 }
 
+function updateBannerScroll(){
+  const viewport = document.getElementById("bannerViewport");
+  const text = document.getElementById("bannerText");
+  if(!viewport || !text) return;
+
+  text.classList.remove("scroll");
+  text.style.removeProperty("--scroll-distance");
+  text.style.removeProperty("animation-duration");
+
+  const viewportWidth = viewport.clientWidth;
+  const textWidth = text.scrollWidth;
+
+  if(textWidth > viewportWidth){
+    const gap = 40;
+    const distance = textWidth + gap;
+    const duration = Math.max(8, distance / 28);
+    text.style.setProperty("--scroll-distance", distance + "px");
+    text.style.animationDuration = duration + "s";
+    text.classList.add("scroll");
+  }
+}
+
 function setBanner(rains, currentCode){
   const maxRain = Math.max(...rains);
   const dot = document.getElementById("dot");
@@ -554,6 +610,8 @@ function setBanner(rains, currentCode){
     dot.style.boxShadow = "0 0 10px rgba(69,229,154,.6)";
     text.textContent = "No significant weather concerns in the next 24 hours";
   }
+
+  requestAnimationFrame(updateBannerScroll);
 }
 
 function renderChart(hours, temps, rains){
@@ -765,8 +823,12 @@ async function loadWeather(){
     document.getElementById("condition").textContent = "Weather unavailable";
     document.getElementById("summary").textContent = "Will retry automatically";
     document.getElementById("updated").textContent = "Retrying soon";
+    document.getElementById("bannerText").textContent = "Weather data connection issue. Retrying automatically.";
+    requestAnimationFrame(updateBannerScroll);
   }
 }
+
+window.addEventListener("resize", updateBannerScroll);
 
 loadWeather();
 setInterval(loadWeather, CONFIG.refreshMs);
