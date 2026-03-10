@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=714, initial-scale=1.0">
+<title>Weather Dashboard</title>
+<style>
+:root{
+  --w:714px;
+  --h:225px;
+
+  --bg:#000000;
+  --text:#f2f6fb;
+  --muted:#b4c2d6;
+  --soft:#8fa3bf;
+
+  --cyan:#68ddff;
+  --cyan2:#b6f4ff;
+  --cyan3:#36cfff;
+
+  --green:#45e59a;
+  --yellow:#ffd05d;
+  --red:#ff7d7d;
+
+  --sun:#ffd05d;
+  --cloud:#eaf3ff;
+  --cloud2:#cfe0f7;
+  --moon:#c8d8f3;
+}
+
+*{box-sizing:border-box}
+
+html,body{
+  margin:0;
+  width:var(--w);
+  height:var(--h);
+  overflow:hidden;
+  font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color:var(--text);
+  background:#000;
+}
+
+body{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.015), rgba(255,255,255,0)),
+    linear-gradient(180deg, #000000 0%, #000000 100%);
+}
+
+.shell{
+  width:714px;
+  height:225px;
+  padding:10px 12px 8px;
+  position:relative;
+}
+
+.layout{
+  width:100%;
+  height:100%;
+  display:grid;
+  grid-template-columns:212px 1fr;
+  grid-template-rows:106px 1fr;
+  gap:10px;
+}
+
+.current{
+  grid-column:1;
+  grid-row:1 / span 2;
+  padding:2px 4px 0 0;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+}
+
+.chartPanel{
+  grid-column:2;
+  grid-row:1;
+  position:relative;
+}
+
+.daysPanel{
+  grid-column:2;
+  grid-row:2;
+  position:relative;
+}
+
+.toprow{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:8px;
+}
+
+.temp{
+  font-size:52px;
+  line-height:.9;
+  font-weight:800;
+  letter-spacing:-1.5px;
+  color:var(--text);
+}
+
+.updated{
+  font-size:11px;
+  color:var(--muted);
+  padding-top:3px;
+  white-space:nowrap;
+  font-weight:600;
+}
+
+.mid{
+  display:grid;
+  grid-template-columns:1fr 58px;
+  gap:8px;
+  align-items:center;
+  margin-top:2px;
+}
+
+.condition{
+  font-size:17px;
+  font-weight:800;
+  line-height:1.1;
+  margin-top:2px;
+  color:var(--text);
+}
+
+.summary{
+  margin-top:6px;
+  font-size:12px;
+  color:var(--muted);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-weight:600;
+}
+
+.iconBox{
+  width:58px;
+  height:58px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.iconBox svg{
+  width:42px;
+  height:42px;
+}
+
+.metrics{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:7px;
+  margin-top:8px;
+}
+
+.metric{
+  min-height:42px;
+  border-radius:10px;
+  background:linear-gradient(180deg, rgba(16,35,62,.55), rgba(15,31,55,.45));
+  border:1px solid rgba(27,59,99,.6);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:4px 2px;
+}
+
+.metric .k{
+  font-size:9px;
+  color:var(--soft);
+  text-transform:uppercase;
+  letter-spacing:.8px;
+  line-height:1;
+  font-weight:700;
+}
+
+.metric .v{
+  margin-top:4px;
+  font-size:14px;
+  font-weight:800;
+  line-height:1;
+  color:var(--text);
+}
+
+.banner{
+  margin-top:8px;
+  min-height:28px;
+  border-radius:12px;
+  background:linear-gradient(180deg, rgba(16,35,62,.50), rgba(15,31,55,.40));
+  border:1px solid rgba(27,59,99,.6);
+  display:flex;
+  align-items:center;
+  gap:7px;
+  padding:0 10px;
+  font-size:11px;
+  font-weight:700;
+  color:var(--text);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.dot{
+  width:10px;
+  height:10px;
+  border-radius:999px;
+  flex:0 0 auto;
+  background:var(--green);
+  box-shadow:0 0 10px rgba(69,229,154,.6);
+}
+
+.chartWrap{
+  position:relative;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+}
+
+.chartWrap:before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:
+    linear-gradient(rgba(255,255,255,.02), rgba(255,255,255,0)),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, transparent 1px 58px);
+  pointer-events:none;
+}
+
+.chartSvg{
+  position:absolute;
+  inset:0;
+}
+
+.chartLabels{
+  position:absolute;
+  left:10px;
+  right:10px;
+  bottom:3px;
+  display:grid;
+  grid-template-columns:repeat(8,1fr);
+  pointer-events:none;
+}
+
+.chartLabel{
+  text-align:center;
+  transform:translateX(-50%);
+  color:var(--text);
+  font-size:9px;
+  font-weight:700;
+  white-space:nowrap;
+}
+
+.daysGrid{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:8px;
+  height:100%;
+}
+
+.dayCard{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:space-between;
+  padding:7px 5px 6px;
+  overflow:hidden;
+}
+
+.dayName{
+  font-size:11px;
+  font-weight:800;
+  line-height:1;
+  color:var(--text);
+}
+
+.dayIcon{
+  height:18px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.dayIcon svg{
+  width:16px;
+  height:16px;
+}
+
+.dayTemps{
+  display:flex;
+  align-items:baseline;
+  gap:5px;
+}
+
+.high{
+  font-size:14px;
+  font-weight:800;
+  line-height:1;
+  color:var(--text);
+}
+
+.low{
+  font-size:11px;
+  color:var(--muted);
+  line-height:1;
+  font-weight:600;
+}
+
+.rainRow{
+  width:88%;
+  display:flex;
+  align-items:center;
+  gap:4px;
+}
+
+.rainTrack{
+  flex:1;
+  height:4px;
+  border-radius:999px;
+  background:rgba(255,255,255,.08);
+  overflow:hidden;
+}
+
+.rainFill{
+  height:100%;
+  border-radius:999px;
+  background:linear-gradient(90deg, var(--cyan3), var(--cyan2));
+  box-shadow:0 0 10px rgba(54,207,255,.35);
+}
+
+.rainPct{
+  min-width:18px;
+  text-align:right;
+  font-size:9px;
+  font-weight:800;
+  color:var(--text);
+}
+
+.loading .shimmer{
+  background:linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.10) 50%, rgba(255,255,255,.04) 75%);
+  background-size:200% 100%;
+  animation:shine 1.6s linear infinite;
+  color:transparent !important;
+}
+@keyframes shine{
+  0%{background-position:200% 0}
+  100%{background-position:-200% 0}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="layout loading" id="app">
+    <section class="current">
+      <div>
+        <div class="toprow">
+          <div class="temp shimmer" id="temp">81°</div>
+          <div class="updated shimmer" id="updated">Updated 5:55 PM</div>
+        </div>
+
+        <div class="mid">
+          <div>
+            <div class="condition shimmer" id="condition">Clear</div>
+            <div class="summary shimmer" id="summary">Feels 84° • H 83° • L 71°</div>
+          </div>
+          <div class="iconBox" id="currentIcon"></div>
+        </div>
+
+        <div class="metrics">
+          <div class="metric">
+            <div class="k">Rain</div>
+            <div class="v shimmer" id="rainNow">0%</div>
+          </div>
+          <div class="metric">
+            <div class="k">Humidity</div>
+            <div class="v shimmer" id="humidity">68%</div>
+          </div>
+          <div class="metric">
+            <div class="k">Wind</div>
+            <div class="v shimmer" id="wind">10 mph</div>
+          </div>
+        </div>
+
+        <div class="banner" id="banner">
+          <div class="dot" id="dot"></div>
+          <div id="bannerText">No significant weather concerns in the next 24 hours</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="chartPanel">
+      <div class="chartWrap">
+        <svg class="chartSvg" id="chart" viewBox="0 0 470 106" preserveAspectRatio="none"></svg>
+        <div class="chartLabels" id="chartLabels"></div>
+      </div>
+    </section>
+
+    <section class="daysPanel">
+      <div class="daysGrid" id="daysGrid"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+const CONFIG = {
+  latitude: 26.062438,
+  longitude: -80.194453,
+  refreshMs: 5 * 60 * 1000
+};
+
+const NS = "http://www.w3.org/2000/svg";
+
+function round(n){ return Math.round(Number(n)); }
+function pad2(n){ return String(n).padStart(2, "0"); }
+function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
+
+function shortLabel(iso){
+  const d = new Date(iso);
+  let h = d.getHours();
+  const ap = h >= 12 ? "P" : "A";
+  h = h % 12 || 12;
+  return h + ap;
+}
+
+function updatedTime(d = new Date()){
+  let h = d.getHours();
+  const m = pad2(d.getMinutes());
+  const ap = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return h + ":" + m + " " + ap;
+}
+
+function dayLabel(iso, idx){
+  if(idx === 0) return "Today";
+  return new Date(iso).toLocaleDateString(undefined,{weekday:"short"});
+}
+
+function weatherText(code){
+  const map = {
+    0:"Clear",
+    1:"Mostly Clear",
+    2:"Partly Cloudy",
+    3:"Cloudy",
+    45:"Fog",
+    48:"Fog",
+    51:"Drizzle",
+    53:"Drizzle",
+    55:"Heavy Drizzle",
+    61:"Light Rain",
+    63:"Rain",
+    65:"Heavy Rain",
+    71:"Snow",
+    73:"Snow",
+    75:"Heavy Snow",
+    80:"Rain Showers",
+    81:"Showers",
+    82:"Heavy Showers",
+    95:"Thunderstorm",
+    96:"Storm + Hail",
+    99:"Severe Storm"
+  };
+  return map[code] || "Weather";
+}
+
+function iconSVG(code, isDay = true, size = 24){
+  const sun = "#ffd05d";
+  const rain = "#68ddff";
+  const cloud = "#eaf3ff";
+  const cloud2 = "#cfe0f7";
+  const moon = "#c8d8f3";
+
+  const gSun = `
+    <g>
+      <circle cx="24" cy="24" r="8.6" fill="${sun}"></circle>
+      <g stroke="${sun}" stroke-width="2" stroke-linecap="round">
+        <path d="M24 6v5"></path>
+        <path d="M24 37v5"></path>
+        <path d="M6 24h5"></path>
+        <path d="M37 24h5"></path>
+        <path d="M11.3 11.3l3.8 3.8"></path>
+        <path d="M36.7 11.3l-3.8 3.8"></path>
+        <path d="M15.1 32.9l-3.8 3.8"></path>
+        <path d="M32.9 32.9l3.8 3.8"></path>
+      </g>
+    </g>
+  `;
+
+  const gMoon = `
+    <g>
+      <path d="M30.5 10.2c-1.5-.6-3.1-.9-4.8-.9-7.4 0-13.4 6-13.4 13.4s6 13.4 13.4 13.4c4.9 0 9.2-2.6 11.6-6.6-7 .9-13.3-4.1-14.2-11.1-.5-3.7.7-7.1 3-9.7 1.3.1 2.9.6 4.4 1.5z" fill="${moon}"></path>
+    </g>
+  `;
+
+  const gCloud = `
+    <g>
+      <ellipse cx="22" cy="28" rx="9.8" ry="7" fill="${cloud}"></ellipse>
+      <ellipse cx="31" cy="27" rx="8.2" ry="6.1" fill="${cloud2}"></ellipse>
+      <ellipse cx="16" cy="30" rx="6.3" ry="5" fill="${cloud2}"></ellipse>
+      <rect x="13" y="27" width="24" height="8" rx="4" fill="${cloud}"></rect>
+    </g>
+  `;
+
+  const gRain = `
+    <g stroke="${rain}" stroke-width="2.2" stroke-linecap="round">
+      <path d="M17 37l-2.8 5.4"></path>
+      <path d="M24 37l-2.8 5.4"></path>
+      <path d="M31 37l-2.8 5.4"></path>
+    </g>
+  `;
+
+  const gStorm = `
+    <g>
+      <path d="M23 34h6l-4 6h4l-8 8 2-8h-4z" fill="${sun}"></path>
+    </g>
+  `;
+
+  let inner = "";
+  if([0,1].includes(code)) inner = isDay ? gSun : gMoon;
+  else if(code === 2) inner = (isDay ? gSun : gMoon) + gCloud;
+  else if([3,45,48].includes(code)) inner = gCloud;
+  else if([51,53,55,61,63,65,80,81,82].includes(code)) inner = gCloud + gRain;
+  else if([95,96,99].includes(code)) inner = gCloud + gStorm;
+  else inner = gCloud;
+
+  return `<svg viewBox="0 0 48 48" width="${size}" height="${size}" aria-hidden="true">${inner}</svg>`;
+}
+
+function bezierPath(points){
+  if(!points.length) return "";
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for(let i = 1; i < points.length; i++){
+    const p = points[i - 1];
+    const c = points[i];
+    const mx = (p.x + c.x) / 2;
+    d += ` C ${mx} ${p.y}, ${mx} ${c.y}, ${c.x} ${c.y}`;
+  }
+  return d;
+}
+
+function setBanner(rains, currentCode){
+  const maxRain = Math.max(...rains);
+  const dot = document.getElementById("dot");
+  const text = document.getElementById("bannerText");
+
+  if([95,96,99].includes(currentCode) || maxRain >= 80){
+    dot.style.background = "var(--red)";
+    dot.style.boxShadow = "0 0 10px rgba(255,125,125,.6)";
+    text.textContent = "High rain or storm potential in the next 24 hours";
+  }else if(maxRain >= 45){
+    dot.style.background = "var(--yellow)";
+    dot.style.boxShadow = "0 0 10px rgba(255,208,93,.6)";
+    text.textContent = "Rain possible later today";
+  }else{
+    dot.style.background = "var(--green)";
+    dot.style.boxShadow = "0 0 10px rgba(69,229,154,.6)";
+    text.textContent = "No significant weather concerns in the next 24 hours";
+  }
+}
+
+function renderChart(hours, temps, rains){
+  const svg = document.getElementById("chart");
+  const labels = document.getElementById("chartLabels");
+  svg.innerHTML = "";
+  labels.innerHTML = "";
+
+  const W = 470;
+  const H = 106;
+  const left = 10;
+  const right = 10;
+  const top = 8;
+  const innerW = W - left - right;
+  const tempBottom = 60;
+  const rainBase = 82;
+  const rainMaxH = 14;
+
+  const minT = Math.min(...temps);
+  const maxT = Math.max(...temps);
+  const spread = Math.max(6, maxT - minT);
+
+  const defs = document.createElementNS(NS, "defs");
+  defs.innerHTML = `
+    <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#68ddff"></stop>
+      <stop offset="100%" stop-color="#b6f4ff"></stop>
+    </linearGradient>
+    <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(104,221,255,.25)"></stop>
+      <stop offset="100%" stop-color="rgba(104,221,255,0)"></stop>
+    </linearGradient>
+  `;
+  svg.appendChild(defs);
+
+  for(let i = 0; i < 4; i++){
+    const y = 16 + i * 16;
+    const line = document.createElementNS(NS, "line");
+    line.setAttribute("x1", left);
+    line.setAttribute("x2", W - right);
+    line.setAttribute("y1", y);
+    line.setAttribute("y2", y);
+    line.setAttribute("stroke", "rgba(182,244,255,.08)");
+    line.setAttribute("stroke-width", "1");
+    svg.appendChild(line);
+  }
+
+  for(let i = 0; i < 24; i += 3){
+    const x = left + (innerW / 23) * i;
+    const line = document.createElementNS(NS, "line");
+    line.setAttribute("x1", x);
+    line.setAttribute("x2", x);
+    line.setAttribute("y1", 0);
+    line.setAttribute("y2", H);
+    line.setAttribute("stroke", "rgba(182,244,255,.06)");
+    line.setAttribute("stroke-width", "1");
+    svg.appendChild(line);
+  }
+
+  const points = temps.map((t, i) => {
+    const x = left + (innerW / 23) * i;
+    const y = top + ((maxT - t) / spread) * (tempBottom - top);
+    return {x, y};
+  });
+
+  const area = document.createElementNS(NS, "path");
+  area.setAttribute("d", bezierPath(points) + ` L ${points[points.length - 1].x} ${tempBottom + 6} L ${points[0].x} ${tempBottom + 6} Z`);
+  area.setAttribute("fill", "url(#areaGrad)");
+  svg.appendChild(area);
+
+  const glow = document.createElementNS(NS, "path");
+  glow.setAttribute("d", bezierPath(points));
+  glow.setAttribute("fill", "none");
+  glow.setAttribute("stroke", "rgba(104,221,255,.26)");
+  glow.setAttribute("stroke-width", "6");
+  glow.setAttribute("stroke-linecap", "round");
+  glow.setAttribute("stroke-linejoin", "round");
+  svg.appendChild(glow);
+
+  const line = document.createElementNS(NS, "path");
+  line.setAttribute("d", bezierPath(points));
+  line.setAttribute("fill", "none");
+  line.setAttribute("stroke", "url(#lineGrad)");
+  line.setAttribute("stroke-width", "2.5");
+  line.setAttribute("stroke-linecap", "round");
+  line.setAttribute("stroke-linejoin", "round");
+  svg.appendChild(line);
+
+  for(let i = 0; i < 24; i++){
+    const x = left + (innerW / 23) * i;
+    const barH = clamp(rains[i], 0, 100) / 100 * rainMaxH;
+
+    const bar = document.createElementNS(NS, "rect");
+    bar.setAttribute("x", x - 3.5);
+    bar.setAttribute("y", rainBase - barH);
+    bar.setAttribute("width", 7);
+    bar.setAttribute("height", barH);
+    bar.setAttribute("rx", 2.5);
+    bar.setAttribute("fill", "rgba(54,207,255,.95)");
+    svg.appendChild(bar);
+
+    const dot = document.createElementNS(NS, "circle");
+    dot.setAttribute("cx", x);
+    dot.setAttribute("cy", points[i].y);
+    dot.setAttribute("r", i === 0 ? 3.2 : 2.3);
+    dot.setAttribute("fill", "#ffffff");
+    dot.setAttribute("stroke", "#68ddff");
+    dot.setAttribute("stroke-width", "1.2");
+    svg.appendChild(dot);
+
+    if(i % 3 === 0){
+      const tt = document.createElementNS(NS, "text");
+      tt.setAttribute("x", x);
+      tt.setAttribute("y", Math.max(10, points[i].y - 6));
+      tt.setAttribute("text-anchor", "middle");
+      tt.setAttribute("fill", "#f2f6fb");
+      tt.setAttribute("font-size", "9");
+      tt.setAttribute("font-weight", "700");
+      tt.textContent = round(temps[i]) + "°";
+      svg.appendChild(tt);
+
+      const rt = document.createElementNS(NS, "text");
+      rt.setAttribute("x", x);
+      rt.setAttribute("y", "84");
+      rt.setAttribute("text-anchor", "middle");
+      rt.setAttribute("fill", "#f2f6fb");
+      rt.setAttribute("font-size", "12");
+      rt.setAttribute("font-weight", "800");
+      rt.textContent = round(rains[i]) + "%";
+      svg.appendChild(rt);
+
+      const label = document.createElement("div");
+      label.className = "chartLabel";
+      label.textContent = i === 0 ? "Now" : shortLabel(hours[i]);
+      labels.appendChild(label);
+    }
+  }
+}
+
+function renderDays(days, codes, highs, lows, rain){
+  const grid = document.getElementById("daysGrid");
+  grid.innerHTML = "";
+
+  for(let i = 0; i < 5; i++){
+    const card = document.createElement("div");
+    card.className = "dayCard";
+    card.innerHTML = `
+      <div class="dayName">${dayLabel(days[i], i)}</div>
+      <div class="dayIcon">${iconSVG(codes[i], true, 16)}</div>
+      <div class="dayTemps">
+        <div class="high">${round(highs[i])}°</div>
+        <div class="low">${round(lows[i])}°</div>
+      </div>
+      <div class="rainRow">
+        <div class="rainTrack"><div class="rainFill" style="width:${clamp(round(rain[i]),0,100)}%"></div></div>
+        <div class="rainPct">${round(rain[i])}%</div>
+      </div>
+    `;
+    grid.appendChild(card);
+  }
+}
+
+async function loadWeather(){
+  const url =
+    `https://api.open-meteo.com/v1/forecast?latitude=${CONFIG.latitude}&longitude=${CONFIG.longitude}` +
+    `&current=temperature_2m,weather_code,apparent_temperature,relative_humidity_2m,wind_speed_10m,is_day` +
+    `&hourly=temperature_2m,precipitation_probability,weather_code,is_day` +
+    `&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max` +
+    `&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=10`;
+
+  try{
+    const res = await fetch(url, {cache:"no-store"});
+    if(!res.ok) throw new Error("weather");
+    const data = await res.json();
+
+    const current = data.current;
+    const hourly = data.hourly;
+    const daily = data.daily;
+
+    let startIdx = hourly.time.findIndex(t => new Date(t).getTime() >= Date.now() - 15 * 60 * 1000);
+    if(startIdx < 0) startIdx = 0;
+
+    const hours24 = hourly.time.slice(startIdx, startIdx + 24);
+    const temps24 = hourly.temperature_2m.slice(startIdx, startIdx + 24);
+    const rains24 = hourly.precipitation_probability.slice(startIdx, startIdx + 24);
+
+    document.getElementById("updated").textContent = "Updated " + updatedTime(new Date());
+    document.getElementById("temp").textContent = round(current.temperature_2m) + "°";
+    document.getElementById("condition").textContent = weatherText(current.weather_code);
+    document.getElementById("summary").textContent =
+      `Feels ${round(current.apparent_temperature)}° • H ${round(daily.temperature_2m_max[0])}° • L ${round(daily.temperature_2m_min[0])}°`;
+    document.getElementById("currentIcon").innerHTML = iconSVG(current.weather_code, Number(current.is_day) === 1, 42);
+    document.getElementById("rainNow").textContent = round(rains24[0] || 0) + "%";
+    document.getElementById("humidity").textContent = round(current.relative_humidity_2m) + "%";
+    document.getElementById("wind").textContent = round(current.wind_speed_10m) + " mph";
+
+    setBanner(rains24, current.weather_code);
+    renderChart(hours24, temps24, rains24);
+    renderDays(
+      daily.time.slice(0, 5),
+      daily.weather_code.slice(0, 5),
+      daily.temperature_2m_max.slice(0, 5),
+      daily.temperature_2m_min.slice(0, 5),
+      daily.precipitation_probability_max.slice(0, 5)
+    );
+
+    document.getElementById("app").classList.remove("loading");
+  }catch(e){
+    document.getElementById("condition").textContent = "Weather unavailable";
+    document.getElementById("summary").textContent = "Will retry automatically";
+    document.getElementById("updated").textContent = "Retrying soon";
+  }
+}
+
+loadWeather();
+setInterval(loadWeather, CONFIG.refreshMs);
+</script>
+</body>
+</html>
