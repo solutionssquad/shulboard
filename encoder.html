@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Encoder Rev4</title>
+<title>Encoder Rev8</title>
 
 <style>
 html, body {
@@ -15,7 +15,7 @@ html, body {
 }
 
 .wrap {
-  max-width: 980px;
+  max-width: 1500px;
   margin: 18px auto;
   padding: 16px;
 }
@@ -72,13 +72,18 @@ button.secondary {
   background: #333;
 }
 
+button.tiny {
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
 small {
   color: #b7b7b7;
 }
 
 .code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 hr {
@@ -87,36 +92,107 @@ hr {
   margin: 18px 0;
 }
 
-.listgrid {
+.snapshotGrid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
 }
 
-.item {
+.snapshotCard {
   border: 1px solid #222;
   background: #0f0f0f;
-  border-radius: 8px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.snapshotPreview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.snapshotPreview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: #000;
+}
+
+.snapshotOverlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to top, rgba(0,0,0,0.65), rgba(0,0,0,0.05) 45%, rgba(0,0,0,0.15));
+}
+
+.snapshotBadge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(0,0,0,0.78);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: #fff;
+  font-size: 11px;
+  padding: 4px 7px;
+  border-radius: 999px;
+}
+
+.snapshotOpen {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  background: rgba(31,111,235,0.92);
+  color: #fff;
+  font-size: 11px;
+  padding: 4px 7px;
+  border-radius: 999px;
+}
+
+.snapshotFallback {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 14px;
+  color: #d8d8d8;
+  background:
+    radial-gradient(circle at center, #161616 0%, #0a0a0a 70%);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.snapshotMeta {
   padding: 10px;
 }
 
-.itemhead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 6px;
-}
-
-.itemname {
+.snapshotName {
   font-weight: 600;
+  margin-bottom: 6px;
+  line-height: 1.25;
 }
 
-.itemurl {
+.snapshotRawUrl,
+.snapshotPlayerUrl {
+  color: #d7d7d7;
+  font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #d7d7d7;
+  margin-bottom: 6px;
+}
+
+.snapshotStatus {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #a9a9a9;
 }
 
 .itembtns {
@@ -126,23 +202,53 @@ hr {
   margin-top: 8px;
 }
 
-button.tiny {
-  padding: 7px 10px;
-  font-size: 12px;
+@media (max-width: 1500px) {
+  .snapshotGrid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (max-width: 1280px) {
+  .snapshotGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 1024px) {
+  .snapshotGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .snapshotGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .row { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .snapshotGrid { grid-template-columns: 1fr; }
 }
 </style>
 </head>
 
 <body>
 <div class="wrap">
-  <h1>Wallboard URL Encoder Rev4</h1>
+  <h1>Wallboard URL Encoder Rev8</h1>
   <small>
-    Paste an HLS .m3u8 URL (or any URL) and this page generates a ready-to-copy player.html link.
-    Includes a decoder and a saved list of stream sources you can click to populate the encoder.
+    Paste an HLS .m3u8 URL and this page generates a ready-to-copy player.html link.
+    Feed tiles show preview when possible, and keep the original info and generate actions.
+    All Open actions force unmuted playback and full controls.
   </small>
+
+  <hr />
+
+  <h2>Saved stream grid</h2>
+  <small>
+    Click the preview area to open the generated player URL in a new window.
+    Use Load to populate the encoder fields.
+    Use Copy ready to copy the final player URL.
+    Open uses muted=0 and controls=1.
+  </small>
+
+  <div id="snapshotGrid" class="snapshotGrid"></div>
+
+  <hr />
 
   <label for="base">Player base URL</label>
   <input id="base" type="text" value="https://solutionssquad.github.io/shulboard/player.html" />
+
+  <label for="srcId">Stream ID (used as ID= in the generated URL)</label>
+  <input id="srcId" type="text" value="STREAM" />
 
   <label for="src">Stream URL (raw, NOT encoded)</label>
   <textarea id="src" placeholder="https://example.com/live/master.m3u8"></textarea>
@@ -183,20 +289,9 @@ button.tiny {
 
   <hr />
 
-  <h2>Saved stream list (click to load into encoder)</h2>
-  <small>
-    Edit the list in the <span class="code">STREAMS</span> object inside this file as you find more sources.
-    Click <span class="code">Load</span> to put the URL into the encoder, then copy the generated output.
-  </small>
-
-  <div id="streamList" class="listgrid"></div>
-
-  <hr />
-
   <h2>Decoder / Reverse Check</h2>
   <small>
-    Paste a full player.html URL below. This extracts the src parameter and decodes it (once and twice),
-    so you can spot double-encoding issues.
+    Paste a full player.html URL below. This extracts the src parameter and decodes it once and twice so you can spot double-encoding issues.
   </small>
 
   <label for="fullUrl">Full player URL to decode</label>
@@ -224,12 +319,13 @@ button.tiny {
   </small>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script>
 function $(id) { return document.getElementById(id); }
 function clean(s) { return (s || "").trim(); }
 
 const STREAMS = [
-  { name: "IRINN", url: "https://tv.irna.ir/live/stream/index.m3u8" },  
+  { name: "IRINN", url: "https://tv.irna.ir/live/stream/index.m3u8" },
   { name: "Live now fox", url: "https://fox-foxnewsnow-vizio.amagi.tv/playlist.m3u8" },
   { name: "IL13", url: "https://d2xg1g9o5vns8m.cloudfront.net/out/v1/66d4ac8748ce4a9298b4e40e48d1ae2f/index.m3u8" },
   { name: "i24", url: "https://fastly.live.brightcove.com/6386790908112/eu-central-1/5377161796001/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJob3N0IjoiZXJmajYzLmVncmVzcy53YzQ3bTEiLCJhY2NvdW50X2lkIjoiNTM3NzE2MTc5NjAwMSIsImVobiI6ImZhc3RseS5saXZlLmJyaWdodGNvdmUuY29tIiwiaXNzIjoiYmxpdmUtcGxheWJhY2stc291cmNlLWFwaSIsInN1YiI6InBhdGhtYXB0b2tlbiIsImF1ZCI6WyI1Mzc3MTYxNzk2MDAxIl0sImp0aSI6IjYzODY3OTA5MDgxMTIifQ._w5c3EwfnEecDCEpDaKuVz07uuEyUb3vXvQN3svv-oU/chunklist.m3u8" },
@@ -250,26 +346,65 @@ const STREAMS = [
   { name: "Al Jazeera", url: "https://live-hls-web-aje-gcp.thehlive.com/AJE/03.m3u8" }
 ];
 
-function build() {
-  const base = clean($("base").value);
-  const src = clean($("src").value);
-  const fit = $("fit").value;
-  const muted = $("muted").value;
-  const reload = clean($("reload").value) || "0";
+function buildCustom(opts) {
+  const base = clean(opts.base);
+  const src = clean(opts.src);
+  const fit = clean(opts.fit) || "contain";
+  const muted = String(opts.muted ?? "1");
+  const reload = clean(opts.reload) || "0";
+  const srcId = clean(opts.srcId) || "STREAM";
+  const controls = String(opts.controls ?? "0");
 
   if (!base) return "Missing player base URL.";
   if (!src) return "Missing stream URL.";
 
   const params = new URLSearchParams();
-  params.set("ID", clean($("srcId").value) || "STREAM");
+  params.set("ID", srcId);
   params.set("src", src);
   params.set("fit", fit);
   params.set("muted", muted);
+  params.set("controls", controls);
 
   const r = parseInt(reload, 10);
   if (!isNaN(r) && r > 0) params.set("reload", String(r));
 
   return base + "?" + params.toString();
+}
+
+function build() {
+  return buildCustom({
+    base: $("base").value,
+    src: $("src").value,
+    fit: $("fit").value,
+    muted: $("muted").value,
+    reload: $("reload").value,
+    srcId: $("srcId").value,
+    controls: "0"
+  });
+}
+
+function buildForStream(stream) {
+  return buildCustom({
+    base: $("base").value,
+    src: stream.url,
+    fit: $("fit").value,
+    muted: $("muted").value,
+    reload: $("reload").value,
+    srcId: stream.name.replace(/\s+/g, ""),
+    controls: "0"
+  });
+}
+
+function buildOpenForStream(stream) {
+  return buildCustom({
+    base: $("base").value,
+    src: stream.url,
+    fit: $("fit").value,
+    muted: "0",
+    reload: $("reload").value,
+    srcId: stream.name.replace(/\s+/g, ""),
+    controls: "1"
+  });
 }
 
 function safeDecodeOnce(s) {
@@ -279,8 +414,7 @@ function safeDecodeOnce(s) {
 function bestDecode(s) {
   const once = safeDecodeOnce(s);
   const twice = safeDecodeOnce(once);
-  if (twice !== once) return twice;
-  return once;
+  return twice !== once ? twice : once;
 }
 
 async function copyText(text) {
@@ -319,87 +453,196 @@ function decodeFullUrl() {
   $("srcDecoded").value = bestDecode(raw);
 }
 
-function renderStreamList() {
-  const host = $("streamList");
+function loadStreamToEncoder(stream) {
+  $("src").value = stream.url;
+  $("srcId").value = stream.name.replace(/\s+/g, "");
+  $("out").value = build();
+  window.scrollTo({ top: document.querySelector('label[for="base"]').offsetTop - 20, behavior: "smooth" });
+}
+
+function openStreamPlayer(stream) {
+  const fullUrl = buildOpenForStream(stream);
+  if (!fullUrl) return;
+  window.open(fullUrl, "_blank", "noopener,noreferrer");
+}
+
+function setPreviewFallback(video, fallbackEl, statusEl, msg) {
+  video.style.display = "none";
+  fallbackEl.style.display = "flex";
+  statusEl.textContent = msg;
+}
+
+function attachPreview(video, fallbackEl, url, statusEl) {
+  function ok(msg) {
+    statusEl.textContent = msg;
+    fallbackEl.style.display = "none";
+    video.style.display = "block";
+  }
+
+  function fail(msg) {
+    setPreviewFallback(video, fallbackEl, statusEl, msg);
+  }
+
+  video.muted = true;
+  video.autoplay = true;
+  video.playsInline = true;
+  video.controls = false;
+  video.preload = "metadata";
+
+  if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    video.src = url;
+    video.addEventListener("loadedmetadata", () => {
+      video.play().then(() => ok("Preview active")).catch(() => fail("Preview blocked by browser"));
+    }, { once: true });
+    video.addEventListener("error", () => fail("Preview unavailable"));
+    return;
+  }
+
+  if (window.Hls && Hls.isSupported()) {
+    const hls = new Hls({
+      autoStartLoad: true,
+      enableWorker: true,
+      lowLatencyMode: false,
+      manifestLoadingMaxRetry: 1,
+      levelLoadingMaxRetry: 1,
+      fragLoadingMaxRetry: 1
+    });
+
+    hls.loadSource(url);
+    hls.attachMedia(video);
+
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      video.play().then(() => ok("Preview active")).catch(() => fail("Preview blocked by browser"));
+    });
+
+    hls.on(Hls.Events.ERROR, function(event, data) {
+      if (data && data.fatal) {
+        fail("Preview unavailable");
+        try { hls.destroy(); } catch (e) {}
+      }
+    });
+
+    video._hls = hls;
+    return;
+  }
+
+  fail("HLS not supported in this browser");
+}
+
+function renderSnapshotGrid() {
+  const host = $("snapshotGrid");
   host.innerHTML = "";
 
-  STREAMS.forEach((s) => {
-    const div = document.createElement("div");
-    div.className = "item";
+  STREAMS.forEach((stream) => {
+    const card = document.createElement("div");
+    card.className = "snapshotCard";
 
-    const head = document.createElement("div");
-    head.className = "itemhead";
+    const preview = document.createElement("div");
+    preview.className = "snapshotPreview";
+    preview.title = "Open player in new window";
+    preview.addEventListener("click", () => openStreamPlayer(stream));
 
-    const left = document.createElement("div");
+    const video = document.createElement("video");
+
+    const fallback = document.createElement("div");
+    fallback.className = "snapshotFallback";
+    fallback.textContent = "Preview unavailable. Click to open player.";
+
+    const overlay = document.createElement("div");
+    overlay.className = "snapshotOverlay";
+
+    const badge = document.createElement("div");
+    badge.className = "snapshotBadge";
+    badge.textContent = stream.name;
+
+    const open = document.createElement("div");
+    open.className = "snapshotOpen";
+    open.textContent = "Open";
+
+    preview.appendChild(video);
+    preview.appendChild(fallback);
+    preview.appendChild(overlay);
+    preview.appendChild(badge);
+    preview.appendChild(open);
+
+    const meta = document.createElement("div");
+    meta.className = "snapshotMeta";
+
     const name = document.createElement("div");
-    name.className = "itemname";
-    name.textContent = s.name;
+    name.className = "snapshotName";
+    name.textContent = stream.name;
 
-    const url = document.createElement("div");
-    url.className = "itemurl code";
-    url.textContent = s.url;
+    const rawUrl = document.createElement("div");
+    rawUrl.className = "snapshotRawUrl code";
+    rawUrl.textContent = stream.url;
+    rawUrl.title = stream.url;
 
-    left.appendChild(name);
-    left.appendChild(url);
+    const playerUrl = document.createElement("div");
+    playerUrl.className = "snapshotPlayerUrl code";
+    playerUrl.textContent = buildForStream(stream);
+    playerUrl.title = buildForStream(stream);
 
-    head.appendChild(left);
-    div.appendChild(head);
+    const status = document.createElement("div");
+    status.className = "snapshotStatus";
+    status.textContent = "Waiting to load preview...";
 
     const btns = document.createElement("div");
     btns.className = "itembtns";
 
-    const load = document.createElement("button");
-    load.className = "tiny";
-    load.textContent = "Load";
-    load.addEventListener("click", () => {
-      $("src").value = s.url;
-      $("srcId").value = s.name.replace(/\s+/g, "");
-      $("out").value = build();
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      $("src").focus();
-    });
+    const loadBtn = document.createElement("button");
+    loadBtn.className = "tiny";
+    loadBtn.textContent = "Load";
+    loadBtn.addEventListener("click", () => loadStreamToEncoder(stream));
 
-    const copyRaw = document.createElement("button");
-    copyRaw.className = "tiny secondary";
-    copyRaw.textContent = "Copy raw";
-    copyRaw.addEventListener("click", () => copyText(s.url));
+    const copyRawBtn = document.createElement("button");
+    copyRawBtn.className = "tiny secondary";
+    copyRawBtn.textContent = "Copy raw";
+    copyRawBtn.addEventListener("click", () => copyText(stream.url));
 
-    const copyReady = document.createElement("button");
-    copyReady.className = "tiny secondary";
-    copyReady.textContent = "Copy ready";
-    copyReady.addEventListener("click", () => {
-      $("src").value = s.url;
-      $("srcId").value = s.name.replace(/\s+/g, "");
-      const out = build();
-      $("out").value = out;
-      copyText(out);
-    });
+    const copyReadyBtn = document.createElement("button");
+    copyReadyBtn.className = "tiny secondary";
+    copyReadyBtn.textContent = "Copy ready";
+    copyReadyBtn.addEventListener("click", () => copyText(buildForStream(stream)));
 
-    btns.appendChild(load);
-    btns.appendChild(copyRaw);
-    btns.appendChild(copyReady);
+    const openBtn = document.createElement("button");
+    openBtn.className = "tiny secondary";
+    openBtn.textContent = "Open";
+    openBtn.addEventListener("click", () => openStreamPlayer(stream));
 
-    div.appendChild(btns);
-    host.appendChild(div);
+    btns.appendChild(loadBtn);
+    btns.appendChild(copyRawBtn);
+    btns.appendChild(copyReadyBtn);
+    btns.appendChild(openBtn);
+
+    meta.appendChild(name);
+    meta.appendChild(rawUrl);
+    meta.appendChild(playerUrl);
+    meta.appendChild(status);
+    meta.appendChild(btns);
+
+    card.appendChild(preview);
+    card.appendChild(meta);
+    host.appendChild(card);
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        status.textContent = "Loading preview...";
+        attachPreview(video, fallback, stream.url, status);
+        observer.disconnect();
+      });
+    }, { rootMargin: "300px" });
+
+    observer.observe(card);
   });
 }
-
-const idLabel = document.createElement("label");
-idLabel.setAttribute("for", "srcId");
-idLabel.textContent = "Stream ID (used as ID= in the generated URL)";
-document.querySelector(".wrap label[for='src']").insertAdjacentElement("beforebegin", idLabel);
-
-const idInput = document.createElement("input");
-idInput.id = "srcId";
-idInput.type = "text";
-idInput.value = "STREAM";
-document.querySelector(".wrap label[for='src']").insertAdjacentElement("beforebegin", idInput);
 
 $("gen").addEventListener("click", () => { $("out").value = build(); });
 $("copy").addEventListener("click", () => copyText($("out").value));
 $("clear").addEventListener("click", () => {
   $("src").value = "";
   $("out").value = "";
+  $("srcId").value = "STREAM";
   $("src").focus();
 });
 
@@ -410,18 +653,26 @@ $("src").addEventListener("input", () => {
   const s = clean($("src").value);
   if (s.length > 8) $("out").value = build();
 });
-$("fit").addEventListener("change", () => $("out").value = build());
-$("muted").addEventListener("change", () => $("out").value = build());
-$("reload").addEventListener("input", () => $("out").value = build());
-$("base").addEventListener("input", () => $("out").value = build());
-document.addEventListener("input", (e) => {
-  if (e.target && e.target.id === "srcId") $("out").value = build();
+$("fit").addEventListener("change", () => {
+  $("out").value = build();
+  renderSnapshotGrid();
 });
-
+$("muted").addEventListener("change", () => {
+  $("out").value = build();
+  renderSnapshotGrid();
+});
+$("reload").addEventListener("input", () => {
+  $("out").value = build();
+  renderSnapshotGrid();
+});
+$("base").addEventListener("input", () => {
+  $("out").value = build();
+  renderSnapshotGrid();
+});
+$("srcId").addEventListener("input", () => $("out").value = build());
 $("fullUrl").addEventListener("input", decodeFullUrl);
 
-renderStreamList();
+renderSnapshotGrid();
 </script>
-
 </body>
 </html>
