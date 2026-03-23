@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>lvenow</title>
+  <title>LiveNOW Test via Tubi</title>
 
   <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
 
@@ -20,6 +20,7 @@
     .video-wrap {
       width: 100%;
       height: 100vh;
+      background: #000;
     }
 
     #player {
@@ -29,6 +30,20 @@
 
     .video-js .vjs-big-play-button {
       display: none !important;
+    }
+
+    #status {
+      position: fixed;
+      right: 8px;
+      bottom: 8px;
+      z-index: 9999;
+      color: rgba(255,255,255,0.6);
+      font: 12px Arial, sans-serif;
+      background: rgba(0,0,0,0.35);
+      padding: 4px 6px;
+      border-radius: 4px;
+      pointer-events: none;
+      user-select: none;
     }
   </style>
 </head>
@@ -43,19 +58,16 @@
       playsinline
       webkit-playsinline
       controls
-    >
-      <source
-        src="https://fox-foxnewsnow-vizio.amagi.tv/playlist.m3u8"
-        type="application/x-mpegURL"
-      />
-      Your browser does not support HTML5 video.
-    </video>
+    ></video>
   </div>
+
+  <div id="status">loading…</div>
 
   <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
   <script>
-    const STREAM_URL = 'https://fox-foxnewsnow-vizio.amagi.tv/playlist.m3u8';
-    const REFRESH_INTERVAL_MINUTES = 52;
+    const STREAM_URL = 'https://live-manifest.production-public.tubi.io/live/8127bb63-a43e-4859-8681-7c1ad6192796/playlist.m3u8?token=eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJjb3VudHJ5IjoiVVMiLCJkZXZpY2VfaWQiOiI1NjUwZjdmOC0zZjZiLTRiMWQtYTVmZC1hZjNkMjVjMjc5YmYiLCJleHAiOjE3NzQ1MzY2NDksImlzcyI6ImxpdmVfbmV3c19tYW5pZmVzdCIsInBsYXRmb3JtIjoiV0VCIiwicnNzIjoiYXA6bGl2ZW5vdy1mcm9tLWZveC1WODNqSGgiLCJ1c2VyX2lkIjowfQ.swsU4j_Oc3RvKmCdJEg8QA9wmmLVXV3CrEy5axq3TrbrTN9ZRB6KuUrql4ROBrSYTNcOLEo-qgD4vLAhiuv3KA&tb.sid=a64b1204-19b9-491b-ad16-26dee32ce894';
+
+    const statusEl = document.getElementById('status');
 
     const player = videojs('player', {
       fluid: false,
@@ -64,9 +76,8 @@
       muted: true,
       controls: true,
       liveui: true,
-      preferFullWindow: true,
-      bigPlayButton: false,
       responsive: true,
+      bigPlayButton: false,
       controlBar: {
         volumePanel: { inline: false },
         currentTimeDisplay: false,
@@ -77,20 +88,23 @@
       },
       html5: {
         vhs: {
+          overrideNative: true,
           enableLowInitialPlaylist: true,
-          smoothQualityChange: true,
-          overrideNative: true
+          smoothQualityChange: true
         },
         nativeAudioTracks: false,
         nativeVideoTracks: false
       }
     });
 
-    function tryAutoplay() {
-      const playPromise = player.play();
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
 
-      if (playPromise && typeof playPromise.then === 'function') {
-        playPromise.catch(() => {
+    function tryAutoplay() {
+      const p = player.play();
+      if (p && typeof p.then === 'function') {
+        p.catch(() => {
           player.muted(true);
           const retry = player.play();
           if (retry && typeof retry.catch === 'function') {
@@ -100,69 +114,44 @@
       }
     }
 
-    function refreshStream() {
-      player.pause();
+    function loadStream() {
+      setStatus('loading…');
 
       player.src({
         src: STREAM_URL,
         type: 'application/x-mpegURL'
       });
 
-      player.load();
-
-      player.one('loadedmetadata', () => {
-        tryAutoplay();
+      player.ready(() => {
+        player.muted(true);
+        player.load();
+        player.one('loadedmetadata', tryAutoplay);
+        player.one('canplay', tryAutoplay);
+        setTimeout(tryAutoplay, 250);
       });
     }
 
-    player.ready(() => {
-      player.muted(true);
-
-      player.one('loadedmetadata', tryAutoplay);
-      player.one('canplay', tryAutoplay);
-
-      setTimeout(tryAutoplay, 250);
+    player.on('playing', () => {
+      setStatus('live');
     });
-
-    // Auto refresh every X minutes
-    setInterval(() => {
-      refreshStream();
-    }, REFRESH_INTERVAL_MINUTES * 60 * 1000);
-
-    // Optional: refresh if stream stalls
-    let stallTimeout = null;
 
     player.on('waiting', () => {
-      if (stallTimeout) return;
-
-      stallTimeout = setTimeout(() => {
-        if (player.paused() || player.readyState() < 2) {
-          refreshStream();
-        }
-        stallTimeout = null;
-      }, 5000);
+      setStatus('buffering…');
     });
 
-    player.on('playing', () => {
-      if (stallTimeout) {
-        clearTimeout(stallTimeout);
-        stallTimeout = null;
-      }
-    });
-
-    // Error recovery
     player.on('error', () => {
-      setTimeout(() => {
-        refreshStream();
-      }, 2000);
+      const err = player.error();
+      setStatus('error');
+      console.error('Video.js error:', err);
     });
 
-    // Resume if tab becomes active again
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden && player.paused()) {
+      if (!document.hidden) {
         tryAutoplay();
       }
     });
+
+    loadStream();
   </script>
 </body>
 </html>
