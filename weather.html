@@ -463,9 +463,15 @@ function updatedTime(d = new Date()){
   return h + ":" + m + " " + ap;
 }
 
+function parseLocalDate(dateStr){
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
 function dayLabel(iso, idx){
+  const d = parseLocalDate(iso);
   if(idx === 0) return "Today";
-  return new Date(iso).toLocaleDateString(undefined,{weekday:"short"});
+  return d.toLocaleDateString(undefined, { weekday: "short" });
 }
 
 function weatherText(code){
