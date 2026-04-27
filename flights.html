@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Live Flights Overhead 1</title>
+  <title>Live Flights</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -12,313 +12,166 @@
 
   <style>
     :root {
-      --bg: #05070a;
-      --panel: rgba(18, 22, 27, .82);
-      --panel2: rgba(28, 33, 39, .72);
-      --line: rgba(255, 255, 255, .12);
-      --text: rgba(255, 255, 255, .94);
-      --muted: rgba(255, 255, 255, .62);
-      --dim: rgba(255, 255, 255, .38);
       --yellow: #ffd21f;
-      --yellow2: #f7b500;
-      --blue: #74c7ff;
-      --green: #4de28a;
-      --red: #ff6375;
-      --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+      --green: #31d878;
+      --red: #ff596d;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
 
     html, body {
       height: 100%;
       width: 100%;
       margin: 0;
-      background: var(--bg);
       overflow: hidden;
-      color: var(--text);
-      font-family: var(--font);
+      background: #030406;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
     }
 
-    #app {
-      position: relative;
-      width: 100vw;
-      height: 100vh;
+    #app, #map {
+      position: absolute;
+      inset: 0;
       overflow: hidden;
-      background: #05070a;
     }
 
     #map {
-      position: absolute;
-      inset: 0;
       z-index: 1;
-      background: #05070a;
+      background: #050608;
     }
 
+    /*
+      MAP DARKNESS
+      This darkens only the map tiles, not aircraft icons, labels, or status chips.
+      To make the map darker, reduce brightness below .42. To make it lighter, increase it.
+    */
     .leaflet-tile {
-      filter: saturate(.78) brightness(.62) contrast(1.12);
+      /* Dark, high-contrast satellite look. Increase brightness if too dark. */
+      filter: saturate(.92) brightness(.34) contrast(1.28);
+      will-change: transform;
     }
 
     .leaflet-control-container {
       display: none;
     }
 
-    #map:after {
-      content: "";
-      pointer-events: none;
-      position: absolute;
-      inset: 0;
-      z-index: 500;
-      background:
-        radial-gradient(circle at 50% 55%, rgba(255, 210, 31, .04), rgba(0, 0, 0, .18) 54%, rgba(0, 0, 0, .54) 100%),
-        linear-gradient(180deg, rgba(0, 0, 0, .10), rgba(0, 0, 0, .38));
-    }
-
-    #map:before {
-      content: "";
-      pointer-events: none;
-      position: absolute;
-      inset: 0;
-      z-index: 501;
-      opacity: .12;
-      background-image:
-        linear-gradient(rgba(255,255,255,.12) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,.12) 1px, transparent 1px);
-      background-size: 80px 80px;
-      mask-image: radial-gradient(circle at center, black 0 40%, transparent 76%);
+    /*
+      AIRCRAFT MOVEMENT SMOOTHING
+      Leaflet jumps markers to each new API location. This CSS transition smooths that jump.
+      Match the transition duration roughly to UPDATE_MS. Too long can make planes feel delayed.
+    */
+    .leaflet-marker-icon {
+      transition: transform 1.15s linear !important;
+      will-change: transform;
     }
 
     .leaflet-overlay-pane svg path {
       stroke-linecap: round;
       stroke-linejoin: round;
-      filter: drop-shadow(0 0 6px rgba(255, 210, 31, .18));
+      filter: none;
     }
 
-    .topbar {
+    /* Subtle texture overlay. It sits over tiles but below aircraft and labels. */
+    #texture {
       position: absolute;
-      z-index: 900;
-      top: 10px;
-      left: 12px;
-      right: 12px;
-      height: 42px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      inset: 0;
+      z-index: 455;
       pointer-events: none;
-      gap: 10px;
+      opacity: .13;
+      background-image:
+        radial-gradient(circle at 20% 30%, rgba(255,255,255,.35) 0 1px, transparent 1px),
+        radial-gradient(circle at 70% 60%, rgba(255,255,255,.24) 0 1px, transparent 1px);
+      background-size: 28px 28px, 34px 34px;
+      mix-blend-mode: screen;
     }
 
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 9px;
-      min-width: 0;
-      padding: 8px 11px;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: linear-gradient(180deg, rgba(37,42,49,.78), rgba(12,15,19,.78));
-      box-shadow: 0 12px 28px rgba(0,0,0,.36);
-      backdrop-filter: blur(10px);
-    }
-
-    .radar-dot {
-      width: 19px;
-      height: 19px;
-      border-radius: 50%;
-      position: relative;
-      border: 2px solid rgba(255, 210, 31, .85);
-      box-shadow: 0 0 16px rgba(255, 210, 31, .22);
-      flex: 0 0 auto;
-    }
-
-    .radar-dot:before {
-      content: "";
+    .topchips {
       position: absolute;
-      left: 8px;
-      top: 1px;
-      width: 2px;
-      height: 8px;
-      border-radius: 4px;
-      transform-origin: 50% 8px;
-      background: var(--yellow);
-      animation: sweep 2s linear infinite;
-    }
-
-    @keyframes sweep {
-      to { transform: rotate(360deg); }
-    }
-
-    .title-wrap {
-      min-width: 0;
-    }
-
-    .title {
-      font-weight: 850;
-      font-size: 13px;
-      line-height: 1;
-      letter-spacing: .15px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .sub {
-      margin-top: 4px;
-      font-family: var(--mono);
-      color: var(--muted);
-      font-size: 9px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .chips {
+      top: 7px;
+      right: 8px;
+      z-index: 900;
       display: flex;
-      gap: 7px;
+      gap: 5px;
       align-items: center;
-      justify-content: flex-end;
-      flex-wrap: nowrap;
-      min-width: 0;
+      pointer-events: none;
     }
 
     .chip {
-      height: 26px;
+      height: 24px;
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 0 9px;
+      padding: 0 8px;
       border-radius: 999px;
-      border: 1px solid var(--line);
-      background: rgba(17, 21, 26, .76);
-      box-shadow: 0 12px 24px rgba(0,0,0,.28);
-      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,.13);
+      background: rgba(5,7,10,.66);
+      backdrop-filter: blur(4px);
       font-family: var(--mono);
       font-size: 10px;
+      color: rgba(255,255,255,.9);
+      box-shadow: 0 8px 18px rgba(0,0,0,.28);
       white-space: nowrap;
+    }
+
+    .chip.polished {
+      animation: chipBreath 4.5s ease-in-out infinite;
+    }
+
+    @keyframes chipBreath {
+      0%, 100% { box-shadow: 0 6px 16px rgba(0,0,0,.18); }
+      50% { box-shadow: 0 6px 18px rgba(255,210,31,.12); }
     }
 
     .live-led {
-      width: 7px;
-      height: 7px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
       background: var(--green);
-      box-shadow: 0 0 12px var(--green);
+      box-shadow: 0 0 8px var(--green);
     }
 
-    .chip.warn .live-led { background: var(--yellow); box-shadow: 0 0 12px var(--yellow); }
-    .chip.bad .live-led { background: var(--red); box-shadow: 0 0 12px var(--red); }
-
-    #featured {
-      position: absolute;
-      left: 12px;
-      bottom: 12px;
-      z-index: 900;
-      width: min(300px, calc(100vw - 24px));
-      pointer-events: none;
-      display: none;
-      border: 1px solid rgba(255,255,255,.13);
-      border-radius: 16px;
-      background: linear-gradient(180deg, rgba(37,42,49,.82), rgba(12,15,19,.82));
-      box-shadow: 0 18px 34px rgba(0,0,0,.42);
-      backdrop-filter: blur(12px);
-      overflow: hidden;
-    }
-
-    .feat-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      padding: 9px 11px 7px;
-      border-bottom: 1px solid rgba(255,255,255,.09);
-    }
-
-    .feat-call {
-      font-weight: 900;
-      font-size: 17px;
-      color: var(--yellow);
-      letter-spacing: .2px;
-    }
-
-    .badge {
-      font-family: var(--mono);
-      font-size: 9px;
-      border-radius: 999px;
-      padding: 3px 7px;
-      border: 1px solid rgba(255,255,255,.13);
-      color: rgba(255,255,255,.82);
-      background: rgba(255,255,255,.06);
-      white-space: nowrap;
-    }
-
-    .feat-body {
-      padding: 8px 11px 10px;
-    }
-
-    .route {
-      font-size: 11px;
-      color: rgba(255,255,255,.82);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      margin-bottom: 7px;
-    }
-
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 5px;
-    }
-
-    .metric {
-      min-width: 0;
-      padding: 6px 7px;
-      border-radius: 10px;
-      background: rgba(255,255,255,.06);
-      border: 1px solid rgba(255,255,255,.08);
-    }
-
-    .mk {
-      font-family: var(--mono);
-      color: var(--dim);
-      font-size: 8px;
-      font-weight: 800;
-      letter-spacing: .5px;
-    }
-
-    .mv {
-      margin-top: 3px;
-      font-family: var(--mono);
-      color: rgba(255,255,255,.92);
-      font-size: 10px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
+    .chip.warn .live-led { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+    .chip.bad .live-led { background: var(--red); box-shadow: 0 0 8px var(--red); }
 
     .plane-wrap {
-      width: 26px;
-      height: 26px;
+      width: 36px;
+      height: 36px;
       transform-origin: 50% 50%;
-      will-change: transform;
-      filter: drop-shadow(0 5px 8px rgba(0,0,0,.5)) drop-shadow(0 0 8px rgba(255,210,31,.42));
-      transition: transform .24s linear, opacity .25s ease;
+      filter:
+        drop-shadow(0 4px 5px rgba(0,0,0,.9))
+        drop-shadow(0 0 8px var(--planeGlow, rgba(255,210,31,.6)));
+      transition: opacity .25s ease, filter .25s ease;
+    }
+
+    .plane-wrap.nearest {
+      animation: nearestPulse 2.2s ease-in-out infinite;
+    }
+
+    .plane-wrap.emergency {
+      animation: emergencyPulse .9s ease-in-out infinite;
+    }
+
+    @keyframes nearestPulse {
+      0%, 100% { filter: drop-shadow(0 3px 4px rgba(0,0,0,.82)) drop-shadow(0 0 5px var(--planeGlow, rgba(255,210,31,.38))); }
+      50% { filter: drop-shadow(0 3px 5px rgba(0,0,0,.85)) drop-shadow(0 0 11px var(--planeGlow, rgba(255,210,31,.72))); }
+    }
+
+    @keyframes emergencyPulse {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 3px 4px rgba(0,0,0,.82)) drop-shadow(0 0 6px rgba(255,0,0,.65)); }
+      50% { transform: scale(1.18); filter: drop-shadow(0 3px 5px rgba(0,0,0,.9)) drop-shadow(0 0 14px rgba(255,0,0,.95)); }
     }
 
     .plane-wrap.stale {
-      opacity: .35;
+      opacity: .36;
     }
 
     .plane-svg {
       display: block;
-      width: 26px;
-      height: 26px;
+      width: 36px;
+      height: 36px;
     }
 
     .labels {
       position: absolute;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: 100%;
+      inset: 0;
       pointer-events: none;
       z-index: 780;
     }
@@ -327,147 +180,106 @@
       position: absolute;
       transform: translate3d(0,0,0);
       will-change: transform;
-      min-width: 126px;
-      max-width: 190px;
-      padding: 7px 8px;
-      border: 1px solid rgba(255,255,255,.12);
-      border-radius: 12px;
-      background: rgba(18, 22, 27, .84);
-      box-shadow: 0 12px 24px rgba(0,0,0,.34);
-      backdrop-filter: blur(10px);
+      min-width: 156px;
+      max-width: 220px;
+      padding: 8px 9px;
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 13px;
+      background: linear-gradient(180deg, rgba(11,14,18,.84), rgba(3,5,8,.72));
+      box-shadow:
+        0 12px 26px rgba(0,0,0,.52),
+        0 0 0 1px rgba(255,210,31,.09),
+        0 0 22px rgba(255,210,31,.15);
+      backdrop-filter: blur(4px);
       display: none;
+      opacity: 0;
+      transition: opacity .28s ease;
     }
 
-    .label:after {
-      content: "";
-      position: absolute;
-      left: 50%;
-      bottom: -5px;
-      width: 8px;
-      height: 8px;
-      transform: translateX(-50%) rotate(45deg);
-      background: rgba(18, 22, 27, .84);
-      border-right: 1px solid rgba(255,255,255,.12);
-      border-bottom: 1px solid rgba(255,255,255,.12);
+    .label.visible {
+      opacity: .97;
+    }
+
+    .label.emergency {
+      border-color: rgba(255,89,109,.55);
+      box-shadow: 0 7px 18px rgba(255,0,0,.22);
     }
 
     .label-top {
-      display: flex;
+      display: grid;
+      grid-template-columns: 26px minmax(0, 1fr) auto;
       align-items: center;
-      justify-content: space-between;
       gap: 7px;
       min-width: 0;
     }
 
+    .mini-logo-slot {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      background: rgba(255,255,255,.9);
+      box-shadow: 0 0 10px rgba(255,255,255,.10);
+    }
+
+    .mini-logo-slot img {
+      width: 24px;
+      height: 24px;
+      object-fit: contain;
+      display: none;
+    }
+
+    .mini-fallback {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, rgba(255,210,31,.42), rgba(255,255,255,.12));
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 8px;
+      font-weight: 900;
+      letter-spacing: -.3px;
+    }
+
     .label-call {
       color: var(--yellow);
-      font-weight: 900;
-      font-size: 12px;
+      font-weight: 950;
+      font-size: 15px;
+      letter-spacing: .15px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      text-shadow: 0 0 10px rgba(255,210,31,.20);
     }
 
     .label-state {
       font-family: var(--mono);
-      font-size: 8px;
-      color: rgba(255,255,255,.72);
-      flex: 0 0 auto;
-    }
-
-    .label-route {
-      margin-top: 4px;
-      color: var(--muted);
-      font-size: 9px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      font-size: 10px;
+      font-weight: 900;
+      color: rgba(255,255,255,.82);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 999px;
+      padding: 2px 5px;
+      background: rgba(255,255,255,.06);
     }
 
     .label-metrics {
       display: grid;
       grid-template-columns: repeat(3, auto);
-      gap: 7px;
-      margin-top: 5px;
+      gap: 9px;
+      margin-top: 7px;
       font-family: var(--mono);
-      font-size: 9px;
-      color: rgba(255,255,255,.85);
+      font-size: 11px;
+      font-weight: 800;
+      color: rgba(255,255,255,.88);
     }
 
     .label-metrics span {
-      min-width: 0;
       white-space: nowrap;
-    }
-
-    .empty {
-      position: absolute;
-      right: 12px;
-      bottom: 12px;
-      z-index: 900;
-      padding: 8px 10px;
-      border: 1px solid var(--line);
-      border-radius: 13px;
-      background: rgba(18, 22, 27, .78);
-      box-shadow: 0 12px 24px rgba(0,0,0,.32);
-      backdrop-filter: blur(10px);
-      font-size: 11px;
-      color: var(--muted);
-      display: none;
-      pointer-events: none;
-    }
-
-    @media (max-width: 720px), (max-height: 260px) {
-      .topbar {
-        top: 8px;
-        left: 8px;
-        right: 8px;
-        height: 36px;
-      }
-      .brand {
-        padding: 6px 8px;
-        border-radius: 12px;
-      }
-      .title { font-size: 12px; }
-      .sub { display: none; }
-      .chip {
-        height: 24px;
-        font-size: 9px;
-        padding: 0 7px;
-      }
-      .chips .optional {
-        display: none;
-      }
-      #featured {
-        width: 276px;
-        left: 8px;
-        bottom: 8px;
-      }
-      .feat-head {
-        padding: 7px 9px 6px;
-      }
-      .feat-body {
-        padding: 7px 9px 8px;
-      }
-      .feat-call {
-        font-size: 15px;
-      }
-      .metrics {
-        grid-template-columns: repeat(4, 1fr);
-      }
-      .metric {
-        padding: 5px;
-      }
-      .mv {
-        font-size: 9px;
-      }
-      .label {
-        min-width: 112px;
-        max-width: 156px;
-        padding: 6px 7px;
-      }
-      .label-route {
-        display: none;
-      }
     }
   </style>
 </head>
@@ -475,113 +287,151 @@
 <body>
   <div id="app">
     <div id="map"></div>
+    <div id="texture"></div>
     <div id="labels" class="labels"></div>
 
-    <div class="topbar">
-      <div class="brand">
-        <div class="radar-dot"></div>
-        <div class="title-wrap">
-          <div class="title">Live flights overhead</div>
-          <div class="sub" id="subline">26.0702, -80.1850 · 2.5 nm radius</div>
-        </div>
-      </div>
-
-      <div class="chips">
-        <div class="chip" id="liveChip"><span class="live-led"></span><span id="liveText">STARTING</span></div>
-        <div class="chip"><span>AC</span><strong id="countText">0</strong></div>
-        <div class="chip optional"><span>AGE</span><strong id="ageText">n/a</strong></div>
-      </div>
+    <div class="topchips">
+      <div class="chip" id="liveChip"><span class="live-led"></span><span id="liveText">START</span></div>
+      <div class="chip"><span>AC</span><strong id="countText">0</strong></div>
+      <div class="chip"><span>AGE</span><strong id="ageText">n/a</strong></div>
     </div>
-
-    <section id="featured">
-      <div class="feat-head">
-        <div class="feat-call" id="featCall">N/A</div>
-        <div class="badge" id="featState">LIVE</div>
-      </div>
-      <div class="feat-body">
-        <div class="route" id="featRoute">Route unavailable</div>
-        <div class="metrics">
-          <div class="metric"><div class="mk">ALT</div><div class="mv" id="featAlt">n/a</div></div>
-          <div class="metric"><div class="mk">SPD</div><div class="mv" id="featSpd">n/a</div></div>
-          <div class="metric"><div class="mk">VR</div><div class="mv" id="featVr">n/a</div></div>
-          <div class="metric"><div class="mk">DIST</div><div class="mv" id="featDist">n/a</div></div>
-        </div>
-      </div>
-    </section>
-
-    <div class="empty" id="emptyText">Waiting for nearby aircraft</div>
   </div>
 
   <script>
     /***********************************************************************
-     * SETTINGS
+     * USER SETTINGS
+     * Edit this section first. These values control the map position,
+     * data radius, refresh speed, label behavior, and API enrichment.
      **********************************************************************/
+
+    // Starting map center. Use your exact display location or airport-adjacent point.
     const MAP_CENTER_LAT = 26.0702;
     const MAP_CENTER_LON = -80.1850;
+
+    // Initial Leaflet zoom. Higher = closer in. Good kiosk range is usually 13 to 15.
     const MAP_ZOOM = 14;
 
+    // Aircraft search center. Usually keep this equal to the map center.
     const FETCH_LAT = MAP_CENTER_LAT;
     const FETCH_LON = MAP_CENTER_LON;
+
+    // Search radius in nautical miles. Larger radius shows more planes but increases visual clutter.
     const SEARCH_RADIUS_NM = 2.5;
 
-    const UPDATE_MS = 1200;
-    const FETCH_TIMEOUT_MS = 950;
-    const STALE_AIRCRAFT_MS = 30000;
+    // PERFORMANCE MODE
+    // true = only render the closest aircraft. This is best for Raspberry Pi signage.
+    // false = render all aircraft returned by the API within the search radius.
+    const NEAREST_AIRCRAFT_ONLY = false;
 
-    const MAX_LABELED_AIRCRAFT = 5;
-    const LABEL_MAX_DISTANCE_MI = 2.4;
-    const LABEL_ONLY_BELOW_FT = 14000;
-    const HISTORY_POINTS = 8;
+    // When NEAREST_AIRCRAFT_ONLY is false, this caps how many aircraft are rendered.
+    // Lower values improve Raspberry Pi performance.
+    const MAX_RENDERED_AIRCRAFT = 20;
 
-    const CLIMB_FPM_THRESHOLD = 500;
-    const DESC_FPM_THRESHOLD = -500;
-    const AIRBORNE_MIN_FT = 100;
+    // ALTITUDE FILTER
+    // Set to true to hide aircraft outside the altitude range below.
+    const ENABLE_ALTITUDE_FILTER = true;
 
-    const LABEL_SCREEN_PADDING_PX = 8;
-    const LABEL_OFFSET_Y_PX = 14;
+    // Altitude range in feet. Only used when ENABLE_ALTITUDE_FILTER is true.
+    const MIN_AIRCRAFT_ALT_FT = 2;
+    const MAX_AIRCRAFT_ALT_FT = 2000;
 
-    const ADSBDB_ENABLE = true;
-    const ADSBDB_CALLSIGN_TTL_MS = 10 * 60 * 1000;
-    const ADSBDB_HEX_TTL_MS = 12 * 60 * 60 * 1000;
-    const ADSBDB_MAX_QUEUE = 10;
+    // LOCAL AIRLINE LOGOS
+    // Put logo PNG/SVG files next to this HTML file in a folder named "airline-logos".
+    // Example file names: DAL.png, AAL.png, UAL.png, JBU.png, SWA.png, FFT.png
+    // When a local logo is missing, the display falls back to the airline code letters.
+    const USE_LOCAL_AIRLINE_LOGOS = true;
+    const LOCAL_AIRLINE_LOGO_DIR = "airline-logos";
+    const LOCAL_AIRLINE_LOGO_EXT = "png";
 
     /***********************************************************************
-     * DOM
+     * VISUAL EFFECT SETTINGS
+     * These are designed to look better while staying Raspberry Pi friendly.
      **********************************************************************/
+
+    // Aircraft glow intensity. Increase for more dramatic icons, lower for better performance.
+    const ENABLE_PLANE_GLOW = true;
+
+    // Pulse the nearest aircraft very subtly.
+    const ENABLE_NEAREST_AIRCRAFT_HALO = true;
+
+    // Use segmented fading trails instead of one flat polyline.
+    const ENABLE_FADING_TRAILS = true;
+
+    // Scale aircraft by altitude for a subtle depth effect.
+    const ENABLE_ALTITUDE_SCALE = true;
+
+    // Fade labels in/out instead of hard popping.
+    const ENABLE_LABEL_FADE = true;
+
+    // Add a very subtle texture over the map for a more cinematic look.
+    const ENABLE_TEXTURE_OVERLAY = true;
+
+    // Highlight emergency squawk codes 7700, 7600, and 7500.
+    const ENABLE_EMERGENCY_HIGHLIGHT = true;
+
+    // Slight chip breathing animation.
+    const ENABLE_IDLE_UI_POLISH = true;
+
+    // Main aircraft API refresh rate in milliseconds. Lower is more live but harder on Raspberry Pi.
+    const UPDATE_MS = 1150;
+
+    // Fetch timeout in milliseconds. If the API is slow, the tick is abandoned instead of hanging.
+    const FETCH_TIMEOUT_MS = 1000;
+
+    // Remove an aircraft after this many milliseconds without seeing it in the API response.
+    const STALE_AIRCRAFT_MS = 32000;
+
+    // Maximum number of aircraft labels shown at one time.
+    const MAX_LABELED_AIRCRAFT = 8;
+
+    // Only label planes within this many statute miles from the center.
+    const LABEL_MAX_DISTANCE_MI = 2.5;
+
+    // Only label planes below this altitude in feet. Set very high if you want cruise traffic labeled.
+    const LABEL_ONLY_BELOW_FT = 2000;
+
+    // Number of positions kept for trails. 6 points draws the last 5 update segments.
+    const HISTORY_POINTS = 24;
+
+    // Vertical speed thresholds. Positive = taking off/climbing, negative = landing/descending.
+    const CLIMB_FPM_THRESHOLD = 500;
+    const DESC_FPM_THRESHOLD = -500;
+
+    // Aircraft below this altitude are treated as not airborne for label/display priority.
+    const AIRBORNE_MIN_FT = 50;
+
+    // Keeps labels inside the viewport and sets how far above the plane icon they sit.
+    const LABEL_SCREEN_PADDING_PX = 7;
+    const LABEL_OFFSET_Y_PX = 15;
+
+    // ADSBDB adds aircraft type details. It is free, but extra API calls can slow weak hardware.
+    const ADSBDB_ENABLE = true;
+
+    // Cache durations for ADSBDB lookups.
+    const ADSBDB_CALLSIGN_TTL_MS = 20 * 60 * 1000;
+    const ADSBDB_HEX_TTL_MS = 24 * 60 * 60 * 1000;
+
+    // Limits queued ADSBDB lookups so the Raspberry Pi does not get overloaded.
+    const ADSBDB_MAX_QUEUE = 4;
+
     const labelsEl = document.getElementById("labels");
-    const subline = document.getElementById("subline");
+    const textureEl = document.getElementById("texture");
     const liveChip = document.getElementById("liveChip");
     const liveText = document.getElementById("liveText");
     const countText = document.getElementById("countText");
     const ageText = document.getElementById("ageText");
-    const emptyText = document.getElementById("emptyText");
-    const featured = document.getElementById("featured");
-    const featCall = document.getElementById("featCall");
-    const featState = document.getElementById("featState");
-    const featRoute = document.getElementById("featRoute");
-    const featAlt = document.getElementById("featAlt");
-    const featSpd = document.getElementById("featSpd");
-    const featVr = document.getElementById("featVr");
-    const featDist = document.getElementById("featDist");
 
-    subline.textContent = `${MAP_CENTER_LAT.toFixed(4)}, ${MAP_CENTER_LON.toFixed(4)} · ${SEARCH_RADIUS_NM} nm radius`;
+    // Apply optional visual polish settings immediately.
+    if (!ENABLE_TEXTURE_OVERLAY && textureEl) textureEl.style.display = "none";
+    if (ENABLE_IDLE_UI_POLISH) {
+      document.querySelectorAll(".chip").forEach(el => el.classList.add("polished"));
+    }
 
-    /***********************************************************************
-     * UTILITIES
-     **********************************************************************/
     const NM_TO_METERS = 1852;
     const MI_TO_METERS = 1609.344;
+    const EARTH_M = 6371000;
 
-    const state = {
-      lastOkMs: null,
-      lastLatencyMs: null,
-      inFlight: false,
-      rafPending: false,
-      lastStatus: "STARTING",
-      lastError: "",
-      seenCount: 0
-    };
-
+    const state = { lastOkMs: null, lastStatus: "START", inFlight: false, rafPending: false };
     const aircraftState = new Map();
     const callsignCache = new Map();
     const hexCache = new Map();
@@ -597,52 +447,31 @@
     }
 
     function esc(v) {
-      return safeText(v).replace(/[&<>"']/g, c => ({
-        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-      }[c]));
+      return safeText(v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     }
+
+    function toRad(d) { return d * Math.PI / 180; }
 
     function haversineMeters(lat1, lon1, lat2, lon2) {
-      const R = 6371000;
-      const toRad = d => d * Math.PI / 180;
       const dLat = toRad(lat2 - lat1);
       const dLon = toRad(lon2 - lon1);
-      const a = Math.sin(dLat/2) ** 2 +
-        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-        Math.sin(dLon/2) ** 2;
-      return 2 * R * Math.asin(Math.sqrt(a));
+      const a = Math.sin(dLat/2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2) ** 2;
+      return 2 * EARTH_M * Math.asin(Math.sqrt(a));
     }
 
-    function fmtAltFeet(meters) {
-      if (typeof meters !== "number" || Number.isNaN(meters)) return "n/a";
-      return `${Math.round(meters * 3.28084).toLocaleString()} ft`;
+    function fmtAltShort(feet) {
+      if (typeof feet !== "number" || Number.isNaN(feet)) return "n/a";
+      return feet >= 10000 ? `${Math.round(feet / 100) / 10}k` : `${Math.round(feet)}`;
     }
 
-    function fmtAltShort(meters) {
-      if (typeof meters !== "number" || Number.isNaN(meters)) return "n/a";
-      const ft = meters * 3.28084;
-      if (ft >= 10000) return `${Math.round(ft / 100) / 10}k`;
-      return `${Math.round(ft)}`;
-    }
-
-    function fmtSpeedKt(ms) {
-      if (typeof ms !== "number" || Number.isNaN(ms)) return "n/a";
-      return `${Math.round(ms * 1.943844)} kt`;
-    }
-
-    function fmtSpeedShort(ms) {
-      if (typeof ms !== "number" || Number.isNaN(ms)) return "n/a";
-      return `${Math.round(ms * 1.943844)}`;
-    }
-
-    function fmtFpmFromMs(vrateMs) {
-      if (typeof vrateMs !== "number" || Number.isNaN(vrateMs)) return null;
-      return Math.round(vrateMs * 196.850394);
+    function fmtSpeedShort(knots) {
+      if (typeof knots !== "number" || Number.isNaN(knots)) return "n/a";
+      return `${Math.round(knots)}`;
     }
 
     function fmtFpm(fpm) {
-      if (typeof fpm !== "number" || Number.isNaN(fpm)) return "n/a";
-      return `${fpm > 0 ? "+" : ""}${fpm}`;
+      if (typeof fpm !== "number" || Number.isNaN(fpm)) return null;
+      return Math.round(fpm);
     }
 
     function fmtAge(ms) {
@@ -653,51 +482,87 @@
 
     function pickLatLon(ac) {
       if (typeof ac.lat === "number" && typeof ac.lon === "number") return { lat: ac.lat, lon: ac.lon };
-      if (ac.lastPosition && typeof ac.lastPosition.lat === "number" && typeof ac.lastPosition.lon === "number") {
-        return { lat: ac.lastPosition.lat, lon: ac.lastPosition.lon };
-      }
+      if (ac.lastPosition && typeof ac.lastPosition.lat === "number" && typeof ac.lastPosition.lon === "number") return { lat: ac.lastPosition.lat, lon: ac.lastPosition.lon };
       if (typeof ac.rr_lat === "number" && typeof ac.rr_lon === "number") return { lat: ac.rr_lat, lon: ac.rr_lon };
       return null;
     }
 
-    function aircraftAltMeters(ac) {
-      const a = ac.alt_baro ?? ac.alt_geom ?? ac.alt;
-      return typeof a === "number" ? a : null;
+    // Returns the first real numeric field. This avoids unit bugs and handles values like alt_baro: "ground".
+    function firstNumber(...values) {
+      for (const v of values) {
+        if (typeof v === "number" && Number.isFinite(v)) return v;
+      }
+      return null;
     }
 
-    function aircraftSpeedMs(ac) {
-      const s = ac.gs ?? ac.spd ?? ac.speed;
-      return typeof s === "number" ? s : null;
+    // Returns altitude in FEET.
+    // airplanes.live/readsb-style alt_baro and alt_geom are already feet.
+    // The previous version treated them as meters, causing altitude to show about 3.28x too high.
+    function aircraftAltFeet(ac) {
+      return firstNumber(ac.alt_baro, ac.alt_geom, ac.alt);
     }
 
-    function aircraftVrateMs(ac) {
-      const r = ac.baro_rate ?? ac.geom_rate ?? ac.rate;
-      return typeof r === "number" ? r : null;
+    // Returns ground speed in KNOTS. airplanes.live/readsb `gs` is already knots.
+    function aircraftSpeedKt(ac) {
+      return firstNumber(ac.gs, ac.ias, ac.tas, ac.spd, ac.speed);
+    }
+
+    // Returns vertical rate in FEET PER MINUTE. airplanes.live/readsb rates are already ft/min.
+    function aircraftVrateFpm(ac) {
+      return firstNumber(ac.baro_rate, ac.geom_rate, ac.rate);
     }
 
     function aircraftTrackDeg(ac) {
-      const t = ac.track ?? ac.hdg ?? ac.heading;
-      return typeof t === "number" ? t : 0;
-    }
-
-    function altFeetFromMeters(meters) {
-      return typeof meters === "number" && !Number.isNaN(meters) ? meters * 3.28084 : null;
+      return firstNumber(ac.track, ac.true_heading, ac.mag_heading, ac.hdg, ac.heading) ?? 0;
     }
 
     function climbStateFromFpm(fpm) {
       if (typeof fpm !== "number") return "level";
-      if (fpm >= CLIMB_FPM_THRESHOLD) return "climb";
-      if (fpm <= DESC_FPM_THRESHOLD) return "desc";
+      if (fpm >= CLIMB_FPM_THRESHOLD) return "takeoff";
+      if (fpm <= DESC_FPM_THRESHOLD) return "landing";
       return "level";
     }
 
-    function stateText(s) {
-      return s === "climb" ? "CLIMB" : s === "desc" ? "DESC" : "LEVEL";
+    function motionColor(motion) {
+      if (motion === "takeoff") return "#31d878";
+      if (motion === "landing") return "#ff596d";
+      return "#ffd21f";
     }
 
-    function distanceMi(latLng) {
-      return haversineMeters(FETCH_LAT, FETCH_LON, latLng.lat, latLng.lng) / MI_TO_METERS;
+    // Returns an rgba glow color matching the aircraft state.
+    function motionGlow(motion) {
+      if (motion === "takeoff") return "rgba(49,216,120,.72)";
+      if (motion === "landing") return "rgba(255,89,109,.72)";
+      return "rgba(255,210,31,.62)";
     }
+
+    // Larger icons for lower aircraft, smaller icons for high aircraft.
+    function altitudeScale(altFt) {
+      if (!ENABLE_ALTITUDE_SCALE || typeof altFt !== "number") return 1;
+      if (altFt < 1000) return 1.18;
+      if (altFt < 3000) return 1.11;
+      if (altFt < 7000) return 1.04;
+      if (altFt > 18000) return .86;
+      if (altFt > 12000) return .92;
+      return 1;
+    }
+
+    // Slightly lower opacity for high/cruising traffic so low local traffic stands out.
+    function altitudeOpacity(altFt) {
+      if (typeof altFt !== "number") return 1;
+      if (altFt > 18000) return .62;
+      if (altFt > 12000) return .78;
+      return 1;
+    }
+
+    function isEmergencySquawk(ac) {
+      if (!ENABLE_EMERGENCY_HIGHLIGHT) return false;
+      const sq = safeText(ac && (ac.squawk ?? ac.sqk)).replace(/^0+/, "");
+      return sq === "7700" || sq === "7600" || sq === "7500";
+    }
+
+    function stateText(s) { return s === "takeoff" ? "TKOF" : s === "landing" ? "LAND" : "LVL"; }
+    function distanceMi(latLng) { return haversineMeters(FETCH_LAT, FETCH_LON, latLng.lat, latLng.lng) / MI_TO_METERS; }
 
     function airplanesLiveUrl() {
       return `https://api.airplanes.live/v2/point/${encodeURIComponent(FETCH_LAT)}/${encodeURIComponent(FETCH_LON)}/${encodeURIComponent(SEARCH_RADIUS_NM)}?t=${Date.now()}`;
@@ -716,11 +581,30 @@
       return typeof altFt === "number" && altFt >= AIRBORNE_MIN_FT;
     }
 
-    function routeShort(route) {
-      if (!route) return "";
-      const o = route.originIata && route.originIata !== "n/a" ? route.originIata : route.originIcao;
-      const d = route.destIata && route.destIata !== "n/a" ? route.destIata : route.destIcao;
-      return o && d && o !== "n/a" && d !== "n/a" ? `${o} → ${d}` : "";
+    // Returns true when an aircraft passes the optional altitude filter.
+    function passesAltitudeFilter(ac) {
+      if (!ENABLE_ALTITUDE_FILTER) return true;
+      const altFt = aircraftAltFeet(ac);
+      if (typeof altFt !== "number") return false;
+      return altFt >= MIN_AIRCRAFT_ALT_FT && altFt <= MAX_AIRCRAFT_ALT_FT;
+    }
+
+    function airlineCodeFromCallsign(callsign) {
+      const cs = safeText(callsign).toUpperCase().replace(/\s+/g, "");
+      const m = cs.match(/^([A-Z]{2,3})\d/);
+      return m ? m[1] : cs.slice(0, 3);
+    }
+
+    // Airline logo URL builder.
+    // Local logos are more reliable than hotlinked logo services, especially on Yodeck/Raspberry Pi.
+    // Put files in: ./airline-logos/DAL.png, ./airline-logos/AAL.png, etc.
+    function airlineLogoUrl(code) {
+      const c = safeText(code).toUpperCase();
+      if (c === "N/A" || c.length < 2) return "";
+      if (USE_LOCAL_AIRLINE_LOGOS) {
+        return `${LOCAL_AIRLINE_LOGO_DIR}/${encodeURIComponent(c)}.${LOCAL_AIRLINE_LOGO_EXT}`;
+      }
+      return `https://content.airhex.com/content/logos/airlines_${encodeURIComponent(c)}_50_50_s.png`;
     }
 
     function bestType(acPayload, aircraftInfo) {
@@ -732,12 +616,22 @@
       return [mt, t].filter(Boolean).join(" ") || it || fallback;
     }
 
-    /***********************************************************************
-     * MAP
-     **********************************************************************/
+    function aircraftClass(acPayload, aircraftInfo) {
+      const t = safeText((aircraftInfo && aircraftInfo.icaoType) || acPayload.t || acPayload.type).toUpperCase();
+      if (/^H|HELI|EC\d|R44|R66|B06/.test(t)) return "heli";
+      if (/C17|C5|A4|BLCF|AN|IL|C130/.test(t)) return "heavy";
+      if (/A3|A2|B7|B3|E1|E7|CRJ|MD|DC/.test(t)) return "jet";
+      return "prop";
+    }
+
     const map = L.map("map", {
       zoomControl: false,
       attributionControl: false,
+      preferCanvas: true,
+      fadeAnimation: false,
+      markerZoomAnimation: false,
+      zoomAnimation: false,
+      inertia: false,
       dragging: false,
       touchZoom: false,
       scrollWheelZoom: false,
@@ -746,9 +640,12 @@
       keyboard: false
     });
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
       maxZoom: 19,
-      attribution: "&copy; OpenStreetMap &copy; CARTO"
+      updateWhenIdle: true,
+      updateWhenZooming: false,
+      keepBuffer: 1,
+      attribution: "Tiles &copy; Esri"
     }).addTo(map);
 
     map.setView([MAP_CENTER_LAT, MAP_CENTER_LON], MAP_ZOOM);
@@ -756,32 +653,39 @@
     L.circle([FETCH_LAT, FETCH_LON], {
       radius: SEARCH_RADIUS_NM * NM_TO_METERS,
       weight: 1,
-      opacity: .34,
-      color: "rgba(255,210,31,.66)",
-      fillOpacity: .025,
-      fillColor: "rgba(255,210,31,.22)"
+      opacity: .24,
+      color: "rgba(255,255,255,.72)",
+      fillOpacity: .01,
+      fillColor: "rgba(255,255,255,.18)"
     }).addTo(map);
 
-    /***********************************************************************
-     * ICONS AND LABELS
-     **********************************************************************/
-    function planeIconHtml(headingDeg) {
-      const h = typeof headingDeg === "number" ? headingDeg : 0;
-      return `
-        <div class="plane-wrap" style="transform:rotate(${h}deg)">
-          <svg class="plane-svg" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path fill="#ffd21f" stroke="rgba(0,0,0,.38)" stroke-width="2" d="M30 4c1.6 0 3.1 1.2 3.1 3.1v18.1l20.1 12.1c1.4.8 2 2.6 1.2 4l-1.5 2.6c-.8 1.4-2.6 1.9-4 1.1L33.1 36.1v9.1l8 6c1 .8 1.3 2.2.7 3.3l-1.2 2c-.7 1.2-2.2 1.6-3.5 1l-9-4.6-9 4.6c-1.3.6-2.8.2-3.5-1l-1.2-2c-.6-1.1-.3-2.5.7-3.3l8-6v-9.1L15.2 45.1c-1.4.8-3.2.3-4-1.1l-1.5-2.6c-.8-1.4-.2-3.2 1.2-4l20.1-12.1V7.1C31 5.2 32.5 4 30 4z"/>
-          </svg>
-        </div>`;
+    // Returns a simplified SVG path based on detected aircraft class.
+    function planePath(kind) {
+      if (kind === "heli") return '<path d="M31 22h2v8h12v4H33v8h-2v-8H19v-4h12zM18 16h28v3H18zM29 42h6l5 9H24z"/>';
+      if (kind === "heavy") return '<path d="M30 3h4c2 0 3 1.5 3 3.4v17l20 10.5c1.5.8 2.1 2.6 1.3 4.1l-1.4 2.5c-.8 1.4-2.5 1.9-3.9 1.2L37 36v9l9 5.5c1 .6 1.4 1.9.8 3l-1 2c-.6 1.2-2 1.7-3.2 1.1L32 52l-10.6 4.6c-1.2.6-2.6.1-3.2-1.1l-1-2c-.6-1.1-.2-2.4.8-3l9-5.5v-9l-16 5.7c-1.4.7-3.1.2-3.9-1.2L5.7 38c-.8-1.5-.2-3.3 1.3-4.1L27 23.4v-17C27 4.5 28 3 30 3z"/>';
+      if (kind === "prop") return '<path d="M30 5h4c1.6 0 2.7 1.2 2.7 2.8v17.5l17.2 10.4c1.3.8 1.8 2.4 1 3.7l-1.2 2c-.7 1.2-2.3 1.7-3.6 1L36.7 36v8.5l7.2 5.4c.9.7 1.2 2 .6 3l-1 1.7c-.6 1.1-2 1.5-3.1.9L32 51.3l-8.4 4.2c-1.1.6-2.5.2-3.1-.9l-1-1.7c-.6-1-.3-2.3.6-3l7.2-5.4V36l-13.4 7.4c-1.3.7-2.9.2-3.6-1l-1.2-2c-.8-1.3-.3-2.9 1-3.7l17.2-10.4V7.8C27.3 6.2 28.4 5 30 5zM25 16h14v3H25z"/>';
+      return '<path d="M30 4c1.6 0 3.1 1.2 3.1 3.1v18.1l20.1 12.1c1.4.8 2 2.6 1.2 4l-1.5 2.6c-.8 1.4-2.6 1.9-4 1.1L33.1 36.1v9.1l8 6c1 .8 1.3 2.2.7 3.3l-1.2 2c-.7 1.2-2.2 1.6-3.5 1l-9-4.6-9 4.6c-1.3.6-2.8.2-3.5-1l-1.2-2c-.6-1.1-.3-2.5.7-3.3l8-6v-9.1L15.2 45.1c-1.4.8-3.2.3-4-1.1l-1.5-2.6c-.8-1.4-.2-3.2 1.2-4l20.1-12.1V7.1C31 5.2 32.5 4 30 4z"/>';
     }
 
-    function makePlaneDivIcon(headingDeg) {
+    function makePlaneDivIcon(headingDeg, kind, color, glow, scale, opacity, isEmergency) {
+      const h = typeof headingDeg === "number" ? headingDeg : 0;
+      const s = typeof scale === "number" ? scale : 1;
+      const o = typeof opacity === "number" ? opacity : 1;
+      const classes = `plane-wrap${isEmergency ? " emergency" : ""}`;
+      const glowStyle = ENABLE_PLANE_GLOW ? `--planeGlow:${glow};` : "";
       return L.divIcon({
         className: "",
-        html: planeIconHtml(headingDeg),
-        iconSize: [26, 26],
-        iconAnchor: [13, 13]
+        html: `<div class="${classes}" style="${glowStyle}opacity:${o};transform:rotate(${h}deg) scale(${s})"><svg class="plane-svg" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><g fill="${color}" stroke="rgba(0,0,0,.70)" stroke-width="2.5">${planePath(kind)}</g></svg></div>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18]
       });
+    }
+
+    function logoMarkup(code) {
+      const safe = esc(code).slice(0, 3);
+      const url = airlineLogoUrl(code);
+      if (!url) return `<div class="mini-logo-slot"><div class="mini-fallback">${safe}</div></div>`;
+      return `<div class="mini-logo-slot"><img alt="" src="${esc(url)}" referrerpolicy="no-referrer" onload="this.style.display='block';this.nextElementSibling.style.display='none'" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><div class="mini-fallback">${safe}</div></div>`;
     }
 
     function ensureLabel(entry) {
@@ -791,59 +695,54 @@
       labelsEl.appendChild(el);
       entry.labelEl = el;
       entry.labelHtml = "";
-      entry.labelW = 0;
-      entry.labelH = 0;
     }
 
     function labelHtml(entry) {
       const ac = entry.lastPayload || {};
-      const callsign = esc((ac.flight || ac.callsign || "N/A").toUpperCase());
-      const rt = esc(routeShort(entry.routeInfo) || bestType(ac, entry.aircraftInfo) || "Details loading");
-      return `
-        <div class="label-top">
-          <div class="label-call">${callsign}</div>
-          <div class="label-state">${stateText(entry.motion)}</div>
-        </div>
-        <div class="label-route">${rt}</div>
-        <div class="label-metrics">
-          <span>${esc(fmtAltShort(entry.altM))} ft</span>
-          <span>${esc(fmtSpeedShort(entry.speedMs))} kt</span>
-          <span>${entry.distMi.toFixed(1)} mi</span>
-        </div>`;
+      const callsign = safeText(ac.flight || ac.callsign || "N/A").toUpperCase();
+      const airline = airlineCodeFromCallsign(callsign);
+      return `<div class="label-top">${logoMarkup(airline)}<div class="label-call">${esc(callsign)}</div><div class="label-state">${stateText(entry.motion)}</div></div>
+        <div class="label-metrics"><span>ALT ${esc(fmtAltShort(entry.altFt))} ft</span><span>SPD ${esc(fmtSpeedShort(entry.speedKt))} kt</span><span>${entry.distMi.toFixed(1)} mi</span></div>`;
     }
 
     function measureLabel(entry) {
       const el = entry.labelEl;
       if (!el) return;
-      const prevDisplay = el.style.display;
-      const prevVis = el.style.visibility;
+      const pd = el.style.display, pv = el.style.visibility;
       el.style.visibility = "hidden";
       el.style.display = "block";
       const r = el.getBoundingClientRect();
       entry.labelW = Math.ceil(r.width);
       entry.labelH = Math.ceil(r.height);
-      el.style.visibility = prevVis;
-      el.style.display = prevDisplay;
+      el.style.visibility = pv;
+      el.style.display = pd;
     }
 
     function setLabelVisible(entry, visible) {
-      if (entry.labelEl) entry.labelEl.style.display = visible ? "block" : "none";
+      if (!entry.labelEl) return;
+      if (!ENABLE_LABEL_FADE) {
+        entry.labelEl.style.display = visible ? "block" : "none";
+        return;
+      }
+      if (visible) {
+        entry.labelEl.style.display = "block";
+        requestAnimationFrame(() => entry.labelEl && entry.labelEl.classList.add("visible"));
+      } else {
+        entry.labelEl.classList.remove("visible");
+        setTimeout(() => {
+          if (entry.labelEl && !entry.labelEl.classList.contains("visible")) entry.labelEl.style.display = "none";
+        }, 300);
+      }
     }
-
-    function clamp(n, lo, hi) {
-      return Math.max(lo, Math.min(hi, n));
-    }
+    function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 
     function positionLabel(entry) {
       if (!entry.labelEl || !entry.labelWanted) return;
       const p = map.latLngToContainerPoint(entry.marker.getLatLng());
       const mapSize = map.getSize();
-      const w = entry.labelW || 120;
-      const h = entry.labelH || 60;
-      let x = p.x - w / 2;
-      let y = p.y - h - LABEL_OFFSET_Y_PX;
-      x = clamp(x, LABEL_SCREEN_PADDING_PX, mapSize.x - w - LABEL_SCREEN_PADDING_PX);
-      y = clamp(y, LABEL_SCREEN_PADDING_PX, mapSize.y - h - LABEL_SCREEN_PADDING_PX);
+      const w = entry.labelW || 102, h = entry.labelH || 38;
+      let x = clamp(p.x - w / 2, LABEL_SCREEN_PADDING_PX, mapSize.x - w - LABEL_SCREEN_PADDING_PX);
+      let y = clamp(p.y - h - LABEL_OFFSET_Y_PX, LABEL_SCREEN_PADDING_PX, mapSize.y - h - LABEL_SCREEN_PADDING_PX);
       entry.labelEl.style.transform = `translate3d(${Math.round(x)}px,${Math.round(y)}px,0)`;
     }
 
@@ -859,35 +758,24 @@
         entry.labelEl.innerHTML = html;
         measureLabel(entry);
       }
+      entry.labelEl.classList.toggle("emergency", !!entry.isEmergency);
       setLabelVisible(entry, true);
       positionLabel(entry);
     }
 
-    /***********************************************************************
-     * ENRICHMENT
-     **********************************************************************/
     function getCached(cache, key, ttlMs) {
       const v = cache.get(key);
       if (!v) return undefined;
-      if (Date.now() - v.ts > ttlMs) {
-        cache.delete(key);
-        return undefined;
-      }
+      if (Date.now() - v.ts > ttlMs) { cache.delete(key); return undefined; }
       return v.data;
     }
 
-    function setCached(cache, key, data) {
-      cache.set(key, { ts: Date.now(), data });
-    }
+    function setCached(cache, key, data) { cache.set(key, { ts: Date.now(), data }); }
 
     function enqueueEnrich(key, pendingSet, job) {
-      if (pendingSet.has(key)) return;
-      if (enrichQueue.length >= ADSBDB_MAX_QUEUE) return;
+      if (pendingSet.has(key) || enrichQueue.length >= ADSBDB_MAX_QUEUE) return;
       pendingSet.add(key);
-      enrichQueue.push(async () => {
-        try { await job(); }
-        finally { pendingSet.delete(key); }
-      });
+      enrichQueue.push(async () => { try { await job(); } finally { pendingSet.delete(key); } });
       runEnrichQueue();
     }
 
@@ -897,12 +785,12 @@
       while (enrichQueue.length) {
         const job = enrichQueue.shift();
         try { await job(); } catch (_) {}
-        await new Promise(r => setTimeout(r, 160));
+        await new Promise(r => setTimeout(r, 300));
       }
       enrichBusy = false;
     }
 
-    async function fetchJson(url, timeoutMs = 1500) {
+    async function fetchJson(url, timeoutMs = 2000) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
@@ -914,140 +802,136 @@
       }
     }
 
-    function parseAdsbdbRoute(payload) {
-      const fr = payload && payload.response && payload.response.flightroute;
-      if (!fr) return null;
-      const airline = fr.airline || {};
-      const origin = fr.origin || {};
-      const dest = fr.destination || {};
-      return {
-        airlineName: safeText(airline.name),
-        originIcao: safeText(origin.icao_code),
-        originIata: safeText(origin.iata_code),
-        destIcao: safeText(dest.icao_code),
-        destIata: safeText(dest.iata_code)
-      };
-    }
-
     function parseAdsbdbAircraft(payload) {
       const ac = payload && payload.response && payload.response.aircraft;
       if (!ac) return null;
-      return {
-        icaoType: safeText(ac.icao_type),
-        type: safeText(ac.type),
-        manufacturer: safeText(ac.manufacturer),
-        registration: safeText(ac.registration)
-      };
+      return { icaoType: safeText(ac.icao_type), type: safeText(ac.type), manufacturer: safeText(ac.manufacturer), registration: safeText(ac.registration) };
     }
 
     function requestEnrichment(entry, ac, hex) {
       if (!ADSBDB_ENABLE) return;
-      const callsign = safeText(ac.flight || ac.callsign).toUpperCase();
-
-      if (callsign !== "N/A" && entry.routeInfo === null) {
-        const cached = getCached(callsignCache, callsign, ADSBDB_CALLSIGN_TTL_MS);
-        if (cached !== undefined) {
-          entry.routeInfo = cached;
-        } else {
-          enqueueEnrich(callsign, pendingRouteKeys, async () => {
-            const data = parseAdsbdbRoute(await fetchJson(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(callsign)}`));
-            setCached(callsignCache, callsign, data);
-            entry.routeInfo = data;
-            scheduleVisualUpdate();
-          });
-        }
-      }
-
       const hx = safeText(hex).toUpperCase();
       if (hx !== "N/A" && entry.aircraftInfo === null) {
         const cached = getCached(hexCache, hx, ADSBDB_HEX_TTL_MS);
-        if (cached !== undefined) {
-          entry.aircraftInfo = cached;
-        } else {
-          enqueueEnrich(hx, pendingHexKeys, async () => {
-            const data = parseAdsbdbAircraft(await fetchJson(`https://api.adsbdb.com/v0/aircraft/${encodeURIComponent(hx)}`));
-            setCached(hexCache, hx, data);
-            entry.aircraftInfo = data;
-            scheduleVisualUpdate();
-          });
-        }
+        if (cached !== undefined) entry.aircraftInfo = cached;
+        else enqueueEnrich(hx, pendingHexKeys, async () => {
+          const data = parseAdsbdbAircraft(await fetchJson(`https://api.adsbdb.com/v0/aircraft/${encodeURIComponent(hx)}`));
+          setCached(hexCache, hx, data);
+          entry.aircraftInfo = data;
+          entry.iconDirty = true;
+          scheduleVisualUpdate();
+        });
       }
     }
 
-    /***********************************************************************
-     * AIRCRAFT STATE
-     **********************************************************************/
+    // Creates or updates one aircraft marker, trail, label data, and enrichment request.
+    // Draws segmented fading trails. HISTORY_POINTS = 6 means the last 5 update segments.
+    function updateTrail(entry, color) {
+      const pts = entry.history.map(p => [p.lat, p.lon]);
+
+      if (!ENABLE_FADING_TRAILS) {
+        if (!entry.poly) entry.poly = L.polyline([], { weight: 2, opacity: .50, color }).addTo(map);
+        entry.poly.setStyle({ color, opacity: .50, weight: 2 });
+        entry.poly.setLatLngs(pts);
+        return;
+      }
+
+      if (entry.poly) {
+        map.removeLayer(entry.poly);
+        entry.poly = null;
+      }
+
+      if (!entry.trailSegments) entry.trailSegments = [];
+
+      while (entry.trailSegments.length < HISTORY_POINTS - 1) {
+        entry.trailSegments.push(L.polyline([], { weight: 2, opacity: .1, color }).addTo(map));
+      }
+
+      for (let i = 0; i < entry.trailSegments.length; i++) {
+        const seg = entry.trailSegments[i];
+        const a = pts[i];
+        const b = pts[i + 1];
+        if (!a || !b) {
+          seg.setLatLngs([]);
+          continue;
+        }
+        const ageFactor = (i + 1) / Math.max(1, pts.length - 1);
+        seg.setStyle({
+          color,
+          opacity: .10 + ageFactor * .48,
+          weight: 1 + ageFactor * 1.8
+        });
+        seg.setLatLngs([a, b]);
+      }
+    }
+
+    function removeAircraftEntry(hex, entry) {
+      map.removeLayer(entry.marker);
+      if (entry.poly) map.removeLayer(entry.poly);
+      if (entry.trailSegments) entry.trailSegments.forEach(seg => map.removeLayer(seg));
+      if (entry.labelEl && entry.labelEl.parentNode) entry.labelEl.parentNode.removeChild(entry.labelEl);
+      aircraftState.delete(hex);
+    }
+
     function upsertAircraft(ac, nowMs) {
       const hex = safeText(ac.hex).toUpperCase();
       if (hex === "N/A") return null;
-
       const pos = pickLatLon(ac);
       if (!pos) return null;
 
       const latLng = L.latLng(pos.lat, pos.lon);
-      const altM = aircraftAltMeters(ac);
-      const speedMs = aircraftSpeedMs(ac);
-      const fpm = fmtFpmFromMs(aircraftVrateMs(ac));
+      const altFt = aircraftAltFeet(ac);
+      const speedKt = aircraftSpeedKt(ac);
+      const fpm = fmtFpm(aircraftVrateFpm(ac));
       const motion = climbStateFromFpm(fpm);
       const heading = aircraftTrackDeg(ac);
-      const altFt = altFeetFromMeters(altM);
+      const color = motionColor(motion);
 
       let entry = aircraftState.get(hex);
       if (!entry) {
-        const marker = L.marker(latLng, {
-          icon: makePlaneDivIcon(heading),
-          interactive: false,
-          keyboard: false
-        }).addTo(map);
-
-        const poly = L.polyline([], {
-          weight: 2.4,
-          opacity: .64,
-          color: "#ffd21f"
-        }).addTo(map);
-
+        const kind = aircraftClass(ac, null);
+        const scale = altitudeScale(altFt);
+        const opacity = altitudeOpacity(altFt);
+        const emergency = isEmergencySquawk(ac);
+        const marker = L.marker(latLng, { icon: makePlaneDivIcon(heading, kind, color, motionGlow(motion), scale, opacity, emergency), interactive: false, keyboard: false, zIndexOffset: emergency ? 1200 : 800 }).addTo(map);
         entry = {
-          marker,
-          poly,
-          history: [],
-          lastSeenTs: nowMs,
-          lastPayload: ac,
-          lastHeading: heading,
-          routeInfo: null,
-          aircraftInfo: null,
-          labelEl: null,
-          labelHtml: "",
-          labelW: 0,
-          labelH: 0,
-          labelWanted: false,
-          distMi: 0,
-          altM,
-          altFt,
-          speedMs,
-          fpm,
-          motion
+          marker, poly: null, trailSegments: null, history: [], lastSeenTs: nowMs, lastPayload: ac, lastHeading: heading, lastKind: kind, lastColor: color,
+          aircraftInfo: null, labelEl: null, labelHtml: "", labelW: 0, labelH: 0, labelWanted: false,
+          distMi: 0, altFt, speedKt, fpm, motion, isEmergency: emergency, iconDirty: false, isNearest: false
         };
         aircraftState.set(hex, entry);
       }
 
+      entry.marker.setLatLng(latLng);
       entry.lastSeenTs = nowMs;
       entry.lastPayload = ac;
       entry.distMi = distanceMi(latLng);
-      entry.altM = altM;
       entry.altFt = altFt;
-      entry.speedMs = speedMs;
+      entry.speedKt = speedKt;
       entry.fpm = fpm;
       entry.motion = motion;
 
-      entry.marker.setLatLng(latLng);
-      if (Math.abs((entry.lastHeading || 0) - heading) > 2) {
-        entry.marker.setIcon(makePlaneDivIcon(heading));
+      const kind = aircraftClass(ac, entry.aircraftInfo);
+      const scale = altitudeScale(altFt);
+      const opacity = altitudeOpacity(altFt);
+      const emergency = isEmergencySquawk(ac);
+      entry.isEmergency = emergency;
+
+      if (Math.abs((entry.lastHeading || 0) - heading) > 2 || entry.lastKind !== kind || entry.lastColor !== color || entry.iconDirty || entry.lastScale !== scale || entry.lastOpacity !== opacity || entry.lastEmergency !== emergency) {
+        entry.marker.setIcon(makePlaneDivIcon(heading, kind, color, motionGlow(motion), scale, opacity, emergency));
+        entry.marker.setZIndexOffset(emergency ? 1200 : 800);
         entry.lastHeading = heading;
+        entry.lastKind = kind;
+        entry.lastColor = color;
+        entry.lastScale = scale;
+        entry.lastOpacity = opacity;
+        entry.lastEmergency = emergency;
+        entry.iconDirty = false;
       }
 
       entry.history.push({ lat: pos.lat, lon: pos.lon, ts: nowMs });
       if (entry.history.length > HISTORY_POINTS) entry.history.shift();
-      entry.poly.setLatLngs(entry.history.map(p => [p.lat, p.lon]));
+      updateTrail(entry, color);
 
       requestEnrichment(entry, ac, hex);
       return entry;
@@ -1059,59 +943,29 @@
         const el = entry.marker.getElement();
         if (el) {
           const wrap = el.querySelector(".plane-wrap");
-          if (wrap) wrap.classList.toggle("stale", age > UPDATE_MS * 4);
+          if (wrap) wrap.classList.toggle("stale", age > UPDATE_MS * 5);
         }
         if (age > STALE_AIRCRAFT_MS) {
-          map.removeLayer(entry.marker);
-          map.removeLayer(entry.poly);
-          if (entry.labelEl && entry.labelEl.parentNode) entry.labelEl.parentNode.removeChild(entry.labelEl);
-          aircraftState.delete(hex);
+          removeAircraftEntry(hex, entry);
         }
       }
     }
 
+    // Chooses which aircraft labels to show. Closest and lowest aircraft are prioritized.
     function decideLabels() {
       const entries = Array.from(aircraftState.values());
-      const eligible = entries.filter(e => {
-        if (!isAirborne(e.lastPayload, e.altFt)) return false;
-        if (LABEL_MAX_DISTANCE_MI !== null && e.distMi > LABEL_MAX_DISTANCE_MI) return false;
-        if (LABEL_ONLY_BELOW_FT !== null && typeof e.altFt === "number" && e.altFt > LABEL_ONLY_BELOW_FT) return false;
-        return true;
-      });
-
+      const eligible = entries.filter(e => isAirborne(e.lastPayload, e.altFt) && e.distMi <= LABEL_MAX_DISTANCE_MI && (typeof e.altFt !== "number" || e.altFt <= LABEL_ONLY_BELOW_FT));
       eligible.sort((a, b) => {
         const altA = typeof a.altFt === "number" ? a.altFt : 999999;
         const altB = typeof b.altFt === "number" ? b.altFt : 999999;
         return (a.distMi - b.distMi) || (altA - altB);
       });
-
       const keep = new Set(eligible.slice(0, MAX_LABELED_AIRCRAFT));
+      const nearest = eligible[0] || null;
       for (const e of entries) {
         e.labelWanted = keep.has(e);
+        e.isNearest = e === nearest;
       }
-      return eligible[0] || entries.sort((a, b) => a.distMi - b.distMi)[0] || null;
-    }
-
-    function updateFeatured(entry) {
-      if (!entry) {
-        featured.style.display = "none";
-        return;
-      }
-
-      const ac = entry.lastPayload || {};
-      const callsign = safeText(ac.flight || ac.callsign || "N/A").toUpperCase();
-      const route = routeShort(entry.routeInfo);
-      const type = bestType(ac, entry.aircraftInfo);
-      const airline = entry.routeInfo && entry.routeInfo.airlineName !== "n/a" ? entry.routeInfo.airlineName : "";
-
-      featCall.textContent = callsign;
-      featState.textContent = stateText(entry.motion);
-      featRoute.textContent = [airline, route || type].filter(Boolean).join(" · ") || "Details loading";
-      featAlt.textContent = fmtAltFeet(entry.altM);
-      featSpd.textContent = fmtSpeedKt(entry.speedMs);
-      featVr.textContent = fmtFpm(entry.fpm);
-      featDist.textContent = `${entry.distMi.toFixed(1)} mi`;
-      featured.style.display = "block";
     }
 
     function updateStatus(kind, text) {
@@ -1119,7 +973,6 @@
       liveText.textContent = text;
       countText.textContent = String(aircraftState.size);
       ageText.textContent = fmtAge(state.lastOkMs);
-      emptyText.style.display = aircraftState.size ? "none" : "block";
     }
 
     function scheduleVisualUpdate() {
@@ -1127,56 +980,73 @@
       state.rafPending = true;
       requestAnimationFrame(() => {
         state.rafPending = false;
-        const featuredEntry = decideLabels();
-        for (const e of aircraftState.values()) updateLabel(e);
-        updateFeatured(featuredEntry);
-        updateStatus(state.lastStatus === "OK" ? "" : state.lastStatus === "ERROR" ? "bad" : "warn", state.lastStatus);
+        decideLabels();
+        for (const e of aircraftState.values()) {
+          updateLabel(e);
+          const el = e.marker && e.marker.getElement();
+          const wrap = el && el.querySelector(".plane-wrap");
+          if (wrap) wrap.classList.toggle("nearest", ENABLE_NEAREST_AIRCRAFT_HALO && !!e.isNearest && !e.isEmergency);
+        }
+        updateStatus(state.lastStatus === "OK" ? "" : state.lastStatus === "ERR" ? "bad" : "warn", state.lastStatus);
       });
     }
 
-    map.on("move zoom resize", scheduleVisualUpdate);
+    // Applies altitude filtering and optional nearest-aircraft-only rendering.
+    // This reduces marker updates and DOM work, which helps Raspberry Pi playback.
+    function selectAircraftToRender(aircraft) {
+      const filtered = aircraft
+        .filter(ac => passesAltitudeFilter(ac))
+        .map(ac => {
+          const pos = pickLatLon(ac);
+          if (!pos) return null;
+          const d = haversineMeters(FETCH_LAT, FETCH_LON, pos.lat, pos.lon) / MI_TO_METERS;
+          return { ac, d };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.d - b.d);
 
-    /***********************************************************************
-     * MAIN LOOP
-     **********************************************************************/
+      if (NEAREST_AIRCRAFT_ONLY) return filtered.slice(0, 1).map(x => x.ac);
+      return filtered.slice(0, MAX_RENDERED_AIRCRAFT).map(x => x.ac);
+    }
+
     async function fetchWithTimeout(url, timeoutMs) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        return await fetch(url, { cache: "no-store", signal: controller.signal });
-      } finally {
-        clearTimeout(timer);
-      }
+      try { return await fetch(url, { cache: "no-store", signal: controller.signal }); }
+      finally { clearTimeout(timer); }
     }
 
+    // Main refresh loop. Fetches nearby aircraft, updates markers, removes stale aircraft, then redraws labels.
     async function tick() {
       if (state.inFlight) return;
       state.inFlight = true;
-      state.lastStatus = "UPDATING";
-      updateStatus("warn", "UPDATING");
+      state.lastStatus = "UPD";
+      updateStatus("warn", "UPD");
 
       const nowMs = Date.now();
-
       try {
-        const t0 = performance.now();
         const res = await fetchWithTimeout(airplanesLiveUrl(), FETCH_TIMEOUT_MS);
-        state.lastLatencyMs = performance.now() - t0;
-
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const aircraft = selectAircraftToRender(normalizeAircraftList(await res.json()));
+        const visibleHexes = new Set();
+        for (const ac of aircraft) {
+          const entry = upsertAircraft(ac, nowMs);
+          if (entry && ac.hex) visibleHexes.add(String(ac.hex).toUpperCase());
+        }
 
-        const raw = await res.json();
-        const aircraft = normalizeAircraftList(raw);
-        state.seenCount = aircraft.length;
-
-        for (const ac of aircraft) upsertAircraft(ac, nowMs);
+        // Remove aircraft that are no longer selected by the current API response/filter.
+        // This prevents ghost-leftover planes when aircraft leave the radius or altitude filter.
+        for (const [hex, entry] of aircraftState.entries()) {
+          if (!visibleHexes.has(hex)) {
+            removeAircraftEntry(hex, entry);
+          }
+        }
 
         pruneStale(nowMs);
         state.lastOkMs = Date.now();
         state.lastStatus = "OK";
-        state.lastError = "";
       } catch (e) {
-        state.lastStatus = e && e.name === "AbortError" ? "TIMEOUT" : "ERROR";
-        state.lastError = e && e.message ? e.message : "Fetch failed";
+        state.lastStatus = e && e.name === "AbortError" ? "SLOW" : "ERR";
         pruneStale(nowMs);
       } finally {
         scheduleVisualUpdate();
@@ -1184,7 +1054,11 @@
       }
     }
 
-    updateStatus("warn", "STARTING");
+    setInterval(() => {
+      for (const e of aircraftState.values()) positionLabel(e);
+    }, 220);
+
+    updateStatus("warn", "START");
     tick();
     setInterval(tick, UPDATE_MS);
     setInterval(() => updateStatus(state.lastStatus === "OK" ? "" : "warn", state.lastStatus), 1000);
