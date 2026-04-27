@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Live Flights v5</title>
+  <title>Live Flights 6</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -274,6 +274,16 @@
       background: rgba(255,255,255,.06);
     }
 
+    .label-sub {
+      margin-top: 5px;
+      color: rgba(255,255,255,.76);
+      font-size: 11px;
+      font-weight: 750;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     .label-metrics {
       display: grid;
       grid-template-columns: repeat(3, auto);
@@ -336,8 +346,11 @@
     const RETAIN_RECENT_GROUND_MS = 12 * 60 * 1000;
 
     // If an aircraft disappears while low and landing, treat it as a likely landed aircraft.
-    const LANDED_RETENTION_ALT_FT = 350;
-    const LANDED_RETENTION_MAX_SPEED_KT = 120;
+    // More aggressive ground fallback:
+    // if a plane disappears while low inside the radius, keep it as unlabeled ground.
+    // This compensates for free feeds that stop returning aircraft after touchdown.
+    const LANDED_RETENTION_ALT_FT = 2000;
+    const LANDED_RETENTION_MAX_SPEED_KT = 220;
 
     // Refresh timing. Lower is smoother but harder on Raspberry Pi.
     const UPDATE_MS = 1150;
@@ -365,7 +378,13 @@
 
     // ADSBDB adds aircraft type details. Keep queue low for Raspberry Pi.
     const ADSBDB_ENABLE = true;
+
+    // Aircraft model cache, by ICAO hex.
     const ADSBDB_HEX_TTL_MS = 24 * 60 * 60 * 1000;
+
+    // Airline/route cache, by callsign. Used to show actual airline name.
+    const ADSBDB_CALLSIGN_TTL_MS = 20 * 60 * 1000;
+
     const ADSBDB_MAX_QUEUE = 4;
 
     // Local airline logos. Put files like ./airline-logos/DAL.png next to this HTML.
@@ -414,7 +433,9 @@
 
     const aircraftState = new Map();
     const hexCache = new Map();
+    const callsignCache = new Map();
     const pendingHexKeys = new Set();
+    const pendingCallsignKeys = new Set();
     const enrichQueue = [];
     let enrichBusy = false;
 
@@ -746,7 +767,12 @@
     function labelHtml(entry) {
       const n = entry.n;
       const airline = airlineCodeFromCallsign(n.callsign);
+      const airlineName = airlineNameText(entry);
+      const model = aircraftModelText(entry);
+      const route = compactRouteText(entry);
+      const detailParts = [airlineName !== "n/a" ? airlineName : "", model !== "n/a" ? model : "", route].filter(Boolean);
       return `<div class="label-top">${logoMarkup(airline)}<div class="label-call">${esc(n.callsign)}</div><div class="label-state">${motionText(n.motion)}</div></div>
+        <div class="label-sub">${esc(detailParts.join(" · ") || "aircraft details loading")}</div>
         <div class="label-metrics"><span>ALT ${esc(fmtAltShort(n.altFt))} ft</span><span>SPD ${esc(fmtSpeedShort(n.speedKt))}</span><span>${n.distMi.toFixed(1)} mi</span></div>`;
     }
 
@@ -874,10 +900,15 @@
     function likelyJustLanded(entry) {
       if (!entry || !entry.n) return false;
       const n = entry.n;
+
+      // True ground reports should always be retained if the source drops them.
       if (n.ground) return true;
-      if (n.motion !== "landing") return false;
+
+      // The free feed may stop returning aircraft right after touchdown or short final.
+      // Retain any low aircraft that disappears while inside the radius, even if vertical rate is missing.
       if (typeof n.altFt !== "number" || n.altFt > LANDED_RETENTION_ALT_FT) return false;
       if (typeof n.speedKt === "number" && n.speedKt > LANDED_RETENTION_MAX_SPEED_KT) return false;
+
       return true;
     }
 
@@ -975,24 +1006,89 @@
       };
     }
 
-    function requestEnrichment(entry) {
-      if (!ADSBDB_ENABLE) return;
-      const hx = entry.n.hex;
-      if (hx === "N/A" || entry.aircraftInfo !== null) return;
+    function parseAdsbdbCallsign(payload) {
+      const fr = payload && payload.response && payload.response.flightroute;
+      if (!fr) return null;
 
-      const cached = getCached(hexCache, hx, ADSBDB_HEX_TTL_MS);
-      if (cached !== undefined) {
-        entry.aircraftInfo = cached;
-        return;
+      const airline = fr.airline || {};
+      const origin = fr.origin || {};
+      const dest = fr.destination || {};
+
+      return {
+        airlineName: safeText(airline.name),
+        airlineIcao: safeText(airline.icao),
+        airlineIata: safeText(airline.iata),
+        originIata: safeText(origin.iata_code),
+        originIcao: safeText(origin.icao_code),
+        destIata: safeText(dest.iata_code),
+        destIcao: safeText(dest.icao_code)
+      };
+    }
+
+    function aircraftModelText(entry) {
+      const info = entry && entry.aircraftInfo;
+      const raw = entry && entry.n && entry.n.raw ? entry.n.raw : {};
+      if (info) {
+        const make = info.manufacturer && info.manufacturer !== "n/a" ? info.manufacturer : "";
+        const type = info.type && info.type !== "n/a" ? info.type : "";
+        const icao = info.icaoType && info.icaoType !== "n/a" ? info.icaoType : "";
+        const full = [make, type].filter(Boolean).join(" ");
+        return full || icao || safeText(raw.t || raw.type);
+      }
+      return safeText(raw.t || raw.type);
+    }
+
+    function airlineNameText(entry) {
+      const route = entry && entry.routeInfo;
+      if (route && route.airlineName && route.airlineName !== "n/a") return route.airlineName;
+      const raw = entry && entry.n && entry.n.raw ? entry.n.raw : {};
+      return safeText(raw.airline || raw.operator || raw.owner);
+    }
+
+    function compactRouteText(entry) {
+      const route = entry && entry.routeInfo;
+      if (!route) return "";
+      const o = route.originIata && route.originIata !== "n/a" ? route.originIata : route.originIcao;
+      const d = route.destIata && route.destIata !== "n/a" ? route.destIata : route.destIcao;
+      if (!o || !d || o === "n/a" || d === "n/a") return "";
+      return `${o}→${d}`;
+    }
+
+    function requestEnrichment(entry) {
+      if (!ADSBDB_ENABLE || !entry || !entry.n) return;
+
+      // Aircraft model/type by ICAO hex.
+      const hx = entry.n.hex;
+      if (hx !== "N/A" && entry.aircraftInfo === null) {
+        const cached = getCached(hexCache, hx, ADSBDB_HEX_TTL_MS);
+        if (cached !== undefined) {
+          entry.aircraftInfo = cached;
+        } else {
+          enqueueEnrich(hx, pendingHexKeys, async () => {
+            const data = parseAdsbdbAircraft(await fetchJson(`https://api.adsbdb.com/v0/aircraft/${encodeURIComponent(hx)}`));
+            setCached(hexCache, hx, data);
+            entry.aircraftInfo = data;
+            entry.iconDirty = true;
+            scheduleVisualUpdate();
+          });
+        }
       }
 
-      enqueueEnrich(hx, pendingHexKeys, async () => {
-        const data = parseAdsbdbAircraft(await fetchJson(`https://api.adsbdb.com/v0/aircraft/${encodeURIComponent(hx)}`));
-        setCached(hexCache, hx, data);
-        entry.aircraftInfo = data;
-        entry.iconDirty = true;
-        scheduleVisualUpdate();
-      });
+      // Actual airline name and route by callsign.
+      const cs = safeText(entry.n.callsign).toUpperCase();
+      if (cs !== "N/A" && entry.routeInfo === null) {
+        const cached = getCached(callsignCache, cs, ADSBDB_CALLSIGN_TTL_MS);
+        if (cached !== undefined) {
+          entry.routeInfo = cached;
+        } else {
+          enqueueEnrich(cs, pendingCallsignKeys, async () => {
+            const data = parseAdsbdbCallsign(await fetchJson(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(cs)}`));
+            setCached(callsignCache, cs, data);
+            entry.routeInfo = data;
+            scheduleVisualUpdate();
+          });
+        }
+      }
     }
 
     /***********************************************************************
@@ -1023,6 +1119,7 @@
           lastSeenTs: nowMs,
           n,
           aircraftInfo: null,
+          routeInfo: null,
           labelEl: null,
           labelHtml: "",
           labelW: 0,
