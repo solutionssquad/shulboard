@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Live Flights 9</title>
+  <title>Live Flights 10</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -412,7 +412,7 @@
 
     const FETCH_LAT = MAP_CENTER_LAT;
     const FETCH_LON = MAP_CENTER_LON;
-    const SEARCH_RADIUS_NM = 2.5;
+    const SEARCH_RADIUS_NM = 3.0;
     // Airport position (FLL) — used for distance calculations
     const AIRPORT_LAT = 26.0726;
     const AIRPORT_LON = -80.1527;
@@ -437,7 +437,7 @@
 
     const ENABLE_ALTITUDE_FILTER = true;
     const MIN_AIRCRAFT_ALT_FT = 0;
-    const MAX_AIRCRAFT_ALT_FT = 2000;
+    const MAX_AIRCRAFT_ALT_FT = 2200;
 
     const SHOW_GROUND_AIRCRAFT = true;
 
@@ -451,7 +451,7 @@
     const STALE_AIRCRAFT_MS = 32000;
 
     const MAX_LABELED_AIRCRAFT = 8;
-    const LABEL_MAX_DISTANCE_MI = 2.5;
+    const LABEL_MAX_DISTANCE_MI = 2.8;
     const LABEL_ONLY_BELOW_FT = 2000;
 
     const TRAIL_POINTS = 30;  // ~5x longer trail
@@ -473,7 +473,7 @@
     const LOCAL_AIRLINE_LOGO_EXT = "png";
 
     const ENABLE_PLANE_GLOW = true;
-    const ENABLE_NEAREST_AIRCRAFT_HALO = true;
+    const ENABLE_NEAREST_AIRCRAFT_HALO = false;
     const ENABLE_FADING_TRAILS = true;
     const ENABLE_ALTITUDE_SCALE = true;
     const ENABLE_LABEL_FADE = true;
