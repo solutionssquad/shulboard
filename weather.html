@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=714, initial-scale=1.0">
-<title>Weather Dashboard</title>
+<title>Weather.gov Matched Dashboard</title>
 <style>
 :root{
   --w:714px;
@@ -117,9 +117,13 @@ body{
 .condition{
   font-size:17px;
   font-weight:800;
-  line-height:1.1;
+  line-height:1.08;
   margin-top:2px;
   color:var(--text);
+  display:-webkit-box;
+  -webkit-line-clamp:3;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
 }
 
 .summary{
@@ -385,14 +389,14 @@ body{
     <section class="current">
       <div>
         <div class="toprow">
-          <div class="temp shimmer" id="temp">81°</div>
-          <div class="updated shimmer" id="updated">Updated 5:55 PM</div>
+          <div class="temp shimmer" id="temp">80°</div>
+          <div class="updated shimmer" id="updated">Updated 4:00 PM</div>
         </div>
 
         <div class="mid">
           <div>
-            <div class="condition shimmer" id="condition">Clear</div>
-            <div class="summary shimmer" id="summary">Feels 84° • H 83° • L 71°</div>
+            <div class="condition shimmer" id="condition">Mostly Cloudy</div>
+            <div class="summary shimmer" id="summary">Feels 80° • H 84° • L 72°</div>
           </div>
           <div class="iconBox" id="currentIcon"></div>
         </div>
@@ -400,22 +404,22 @@ body{
         <div class="metrics">
           <div class="metric">
             <div class="k">Rain</div>
-            <div class="v shimmer" id="rainNow">0%</div>
+            <div class="v shimmer" id="rainNow">12%</div>
           </div>
           <div class="metric">
             <div class="k">Humidity</div>
-            <div class="v shimmer" id="humidity">68%</div>
+            <div class="v shimmer" id="humidity">71%</div>
           </div>
           <div class="metric">
             <div class="k">Wind</div>
-            <div class="v shimmer" id="wind">10 mph</div>
+            <div class="v shimmer" id="wind">12 mph</div>
           </div>
         </div>
 
         <div class="banner" id="banner">
           <div class="dot" id="dot"></div>
           <div class="bannerViewport" id="bannerViewport">
-            <div class="bannerText" id="bannerText">No significant weather concerns in the next 24 hours</div>
+            <div class="bannerText" id="bannerText">Loading Weather.gov forecast</div>
           </div>
         </div>
       </div>
@@ -438,7 +442,14 @@ body{
 const CONFIG = {
   latitude: 26.062438,
   longitude: -80.194453,
-  refreshMs: 5 * 60 * 1000
+  timezone: "America/New_York",
+  refreshMs: 5 * 60 * 1000,
+
+  // This is the station used by the Weather.gov page for this coordinate:
+  // "Current conditions at Fort Lauderdale/Hollywood International Airport (KFLL)".
+  currentStation: "KFLL",
+  preferredStations: ["KFLL", "KHWO", "KOPF", "KTMB"],
+  apiBase: "https://api.weather.gov"
 };
 
 const NS = "http://www.w3.org/2000/svg";
@@ -446,59 +457,101 @@ const NS = "http://www.w3.org/2000/svg";
 function round(n){ return Math.round(Number(n)); }
 function pad2(n){ return String(n).padStart(2, "0"); }
 function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
+function val(obj){ return obj && obj.value !== undefined ? obj.value : null; }
+function cToF(v){ return v === null || v === undefined || Number.isNaN(Number(v)) ? null : (Number(v) * 9 / 5) + 32; }
+function mpsToMph(v){ return v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v) * 2.2369362920544; }
+function firstNumber(...values){
+  for(const v of values){
+    if(v !== null && v !== undefined && !Number.isNaN(Number(v))) return Number(v);
+  }
+  return null;
+}
+function safeText(v, fallback = "Weather"){ return String(v || fallback).trim() || fallback; }
+function cleanPop(v){ return clamp(round(v === null || v === undefined ? 0 : v), 0, 100); }
+function popValue(period){
+  return cleanPop(period && period.probabilityOfPrecipitation ? period.probabilityOfPrecipitation.value : 0);
+}
+function degToCardinal(deg){
+  if(deg === null || deg === undefined || Number.isNaN(Number(deg))) return "";
+  const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+  return dirs[Math.round(Number(deg) / 22.5) % 16];
+}
+function formatWindObservation(p){
+  const speed = mpsToMph(val(p.windSpeed));
+  const gust = mpsToMph(val(p.windGust));
+  const dir = degToCardinal(val(p.windDirection));
+  if(speed === null) return null;
+  const base = `${dir ? dir + " " : ""}${round(speed)} mph`;
+  return gust !== null && round(gust) > round(speed) ? `${base} G ${round(gust)}` : base;
+}
+
+const dateParts = new Intl.DateTimeFormat("en-US", {
+  timeZone: CONFIG.timezone,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit"
+});
+
+function localDateKey(iso){
+  const parts = dateParts.formatToParts(new Date(iso));
+  const y = parts.find(p => p.type === "year").value;
+  const m = parts.find(p => p.type === "month").value;
+  const d = parts.find(p => p.type === "day").value;
+  return `${y}-${m}-${d}`;
+}
+
+function todayKey(){
+  return localDateKey(new Date().toISOString());
+}
+
+function addDaysToKey(key, offset){
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d + offset));
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
+}
+
+function dayLabelFromKey(key, idx){
+  if(idx === 0) return "Today";
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" });
+}
+
+function formatTime(iso = new Date().toISOString()){
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: CONFIG.timezone,
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(new Date(iso));
+}
 
 function shortLabel(iso){
-  const d = new Date(iso);
-  let h = d.getHours();
-  const ap = h >= 12 ? "P" : "A";
-  h = h % 12 || 12;
-  return h + ap;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: CONFIG.timezone,
+    hour: "numeric",
+    hour12: true
+  }).formatToParts(new Date(iso));
+  const hour = parts.find(p => p.type === "hour").value;
+  const period = parts.find(p => p.type === "dayPeriod").value.charAt(0);
+  return hour + period;
 }
 
-function updatedTime(d = new Date()){
-  let h = d.getHours();
-  const m = pad2(d.getMinutes());
-  const ap = h >= 12 ? "PM" : "AM";
-  h = h % 12 || 12;
-  return h + ":" + m + " " + ap;
+function textToCode(text){
+  const s = String(text || "").toLowerCase();
+  if(/thunder|t-?storm|storm/.test(s)) return 95;
+  if(/snow|sleet|wintry|ice|freezing/.test(s)) return 71;
+  if(/showers|rain|drizzle/.test(s)) return 61;
+  if(/fog|mist|haze|smoke/.test(s)) return 45;
+  if(/overcast|cloudy/.test(s) && !/partly|mostly clear|few/.test(s)) return 3;
+  if(/partly|few|scattered|mostly sunny|mostly clear|partly sunny/.test(s)) return 2;
+  if(/clear|sunny|fair/.test(s)) return 0;
+  return 2;
 }
 
-function parseLocalDate(dateStr){
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-
-function dayLabel(iso, idx){
-  const d = parseLocalDate(iso);
-  if(idx === 0) return "Today";
-  return d.toLocaleDateString(undefined, { weekday: "short" });
-}
-
-function weatherText(code){
-  const map = {
-    0:"Clear",
-    1:"Mostly Clear",
-    2:"Partly Cloudy",
-    3:"Cloudy",
-    45:"Fog",
-    48:"Fog",
-    51:"Drizzle",
-    53:"Drizzle",
-    55:"Heavy Drizzle",
-    61:"Light Rain",
-    63:"Rain",
-    65:"Heavy Rain",
-    71:"Snow",
-    73:"Snow",
-    75:"Heavy Snow",
-    80:"Rain Showers",
-    81:"Showers",
-    82:"Heavy Showers",
-    95:"Thunderstorm",
-    96:"Storm + Hail",
-    99:"Severe Storm"
-  };
-  return map[code] || "Weather";
+function normalizeCondition(text){
+  const t = safeText(text, "Weather");
+  if(t.toLowerCase() === "fair") return "Clear";
+  return t;
 }
 
 function iconSVG(code, isDay = true, size = 24){
@@ -598,23 +651,29 @@ function updateBannerScroll(){
   }
 }
 
-function setBanner(rains, currentCode){
-  const maxRain = Math.max(...rains);
+function setBanner(rains, currentText, alerts){
+  const maxRain = Math.max(0, ...rains.map(cleanPop));
   const dot = document.getElementById("dot");
   const text = document.getElementById("bannerText");
+  const conditionCode = textToCode(currentText);
 
-  if([95,96,99].includes(currentCode) || maxRain >= 80){
+  if(alerts && alerts.length){
+    const first = alerts[0].properties || {};
+    dot.style.background = "var(--yellow)";
+    dot.style.boxShadow = "0 0 10px rgba(255,208,93,.6)";
+    text.textContent = safeText(first.event, "Weather alert") + " in effect";
+  }else if([95,96,99].includes(conditionCode) || maxRain >= 70){
     dot.style.background = "var(--red)";
     dot.style.boxShadow = "0 0 10px rgba(255,125,125,.6)";
     text.textContent = "High rain or storm potential in the next 24 hours";
-  }else if(maxRain >= 45){
+  }else if(maxRain >= 35){
     dot.style.background = "var(--yellow)";
     dot.style.boxShadow = "0 0 10px rgba(255,208,93,.6)";
-    text.textContent = "Rain possible later today";
+    text.textContent = "Rain possible in the next 24 hours";
   }else{
     dot.style.background = "var(--green)";
     dot.style.boxShadow = "0 0 10px rgba(69,229,154,.6)";
-    text.textContent = "No significant weather concerns in the next 24 hours";
+    text.textContent = "No significant Weather.gov alerts for this location";
   }
 
   requestAnimationFrame(updateBannerScroll);
@@ -635,6 +694,17 @@ function renderChart(hours, temps, rains){
   const tempBottom = 60;
   const rainBase = 82;
   const rainMaxH = 14;
+
+  while(hours.length < 24){
+    const lastTime = hours.length ? new Date(hours[hours.length - 1]).getTime() : Date.now();
+    hours.push(new Date(lastTime + 60 * 60 * 1000).toISOString());
+    temps.push(temps.length ? temps[temps.length - 1] : 0);
+    rains.push(0);
+  }
+
+  temps = temps.slice(0, 24).map(t => Number(t));
+  rains = rains.slice(0, 24).map(cleanPop);
+  hours = hours.slice(0, 24);
 
   const minT = Math.min(...temps);
   const maxT = Math.max(...temps);
@@ -757,79 +827,238 @@ function renderChart(hours, temps, rains){
   }
 }
 
-function renderDays(days, codes, highs, lows, rain){
+function renderDays(days){
   const grid = document.getElementById("daysGrid");
   grid.innerHTML = "";
 
   for(let i = 0; i < 5; i++){
+    const day = days[i] || {};
+    const text = safeText(day.text, "Weather");
     const card = document.createElement("div");
     card.className = "dayCard";
     card.innerHTML = `
-      <div class="dayName">${dayLabel(days[i], i)}</div>
-      <div class="dayIcon">${iconSVG(codes[i], true, 16)}</div>
+      <div class="dayName">${dayLabelFromKey(day.key, i)}</div>
+      <div class="dayIcon" title="${text.replace(/"/g, "&quot;")}">${iconSVG(textToCode(text), true, 16)}</div>
       <div class="dayTemps">
-        <div class="high">${round(highs[i])}°</div>
-        <div class="low">${round(lows[i])}°</div>
+        <div class="high">${day.high === null || day.high === undefined ? "--" : round(day.high) + "°"}</div>
+        <div class="low">${day.low === null || day.low === undefined ? "--" : round(day.low) + "°"}</div>
       </div>
       <div class="rainRow">
-        <div class="rainTrack"><div class="rainFill" style="width:${clamp(round(rain[i]),0,100)}%"></div></div>
-        <div class="rainPct">${round(rain[i])}%</div>
+        <div class="rainTrack"><div class="rainFill" style="width:${cleanPop(day.pop)}%"></div></div>
+        <div class="rainPct">${cleanPop(day.pop)}%</div>
       </div>
     `;
     grid.appendChild(card);
   }
 }
 
-async function loadWeather(){
-  const url =
-    `https://api.open-meteo.com/v1/forecast?latitude=${CONFIG.latitude}&longitude=${CONFIG.longitude}` +
-    `&current=temperature_2m,weather_code,apparent_temperature,relative_humidity_2m,wind_speed_10m,is_day` +
-    `&hourly=temperature_2m,precipitation_probability,weather_code,is_day` +
-    `&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max` +
-    `&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=10`;
+async function fetchJson(url){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try{
+    const res = await fetch(url, {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {"Accept": "application/geo+json, application/json"}
+    });
+    if(!res.ok) throw new Error(`${res.status} ${url}`);
+    return await res.json();
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+function stationId(feature){
+  const p = feature && feature.properties ? feature.properties : {};
+  const id = p.stationIdentifier || p.stationId || p.stationID || feature.id || "";
+  return String(id).split("/").pop();
+}
+
+function sortStations(features){
+  const preferred = CONFIG.preferredStations;
+  return [...features].sort((a, b) => {
+    const ai = preferred.indexOf(stationId(a));
+    const bi = preferred.indexOf(stationId(b));
+    const av = ai === -1 ? 999 : ai;
+    const bv = bi === -1 ? 999 : bi;
+    return av - bv;
+  });
+}
+
+async function readStationObservation(stationId, stationName){
+  const obs = await fetchJson(`${CONFIG.apiBase}/stations/${stationId}/observations/latest?require_qc=false`);
+  const p = obs.properties || {};
+  const temp = cToF(val(p.temperature));
+  if(temp === null || Number.isNaN(temp)) return null;
+  return {
+    stationId,
+    name: stationName || stationId,
+    timestamp: p.timestamp,
+    text: normalizeCondition(p.textDescription),
+    temperature: temp,
+    feels: firstNumber(cToF(val(p.heatIndex)), cToF(val(p.windChill)), temp),
+    humidity: val(p.relativeHumidity),
+    wind: mpsToMph(val(p.windSpeed)),
+    windText: formatWindObservation(p)
+  };
+}
+
+async function loadObservation(stationsUrl){
+  // Use the same station Weather.gov shows for the comparison page, then fall back to nearby stations.
+  if(CONFIG.currentStation){
+    try{
+      const direct = await readStationObservation(CONFIG.currentStation, "Fort Lauderdale/Hollywood International Airport");
+      if(direct) return direct;
+    }catch(e){}
+  }
 
   try{
-    const res = await fetch(url, {cache:"no-store"});
-    if(!res.ok) throw new Error("weather");
-    const data = await res.json();
+    const data = await fetchJson(stationsUrl);
+    const stations = sortStations(data.features || []).slice(0, 8);
 
-    const current = data.current;
-    const hourly = data.hourly;
-    const daily = data.daily;
+    for(const station of stations){
+      const id = stationId(station);
+      if(!id) continue;
+      try{
+        const stationName = station.properties && station.properties.name ? station.properties.name : id;
+        const obs = await readStationObservation(id, stationName);
+        if(obs) return obs;
+      }catch(e){
+        continue;
+      }
+    }
+  }catch(e){
+    return null;
+  }
+  return null;
+}
 
-    let startIdx = hourly.time.findIndex(t => new Date(t).getTime() >= Date.now() - 15 * 60 * 1000);
-    if(startIdx < 0) startIdx = 0;
+async function loadAlerts(){
+  try{
+    const url = `${CONFIG.apiBase}/alerts/active?point=${CONFIG.latitude},${CONFIG.longitude}`;
+    const data = await fetchJson(url);
+    return data.features || [];
+  }catch(e){
+    return [];
+  }
+}
 
-    const hours24 = hourly.time.slice(startIdx, startIdx + 24);
-    const temps24 = hourly.temperature_2m.slice(startIdx, startIdx + 24);
-    const rains24 = hourly.precipitation_probability.slice(startIdx, startIdx + 24);
+function firstCurrentHourly(hourlyPeriods){
+  const now = Date.now();
+  const idx = hourlyPeriods.findIndex(p => new Date(p.endTime).getTime() > now);
+  return hourlyPeriods.slice(Math.max(0, idx), Math.max(0, idx) + 24);
+}
 
-    document.getElementById("updated").textContent = "Updated " + updatedTime(new Date());
-    document.getElementById("temp").textContent = round(current.temperature_2m) + "°";
-    document.getElementById("condition").textContent = weatherText(current.weather_code);
+function makeDaily(hourlyPeriods, forecastPeriods){
+  const startKey = todayKey();
+  const byDay = new Map();
+
+  function ensure(key){
+    if(!byDay.has(key)){
+      byDay.set(key, {key, high:null, low:null, pop:0, text:"", dayText:"", nightText:""});
+    }
+    return byDay.get(key);
+  }
+
+  // Match the visible Weather.gov forecast cards: one daytime period plus the following nighttime period.
+  // High/low and rain percentage are taken from the 12-hour text forecast, not recomputed from hourly data.
+  for(const p of forecastPeriods || []){
+    const key = localDateKey(p.startTime);
+    const d = ensure(key);
+    const temp = Number(p.temperature);
+    const pop = popValue(p);
+
+    if(p.isDaytime){
+      d.high = Number.isNaN(temp) ? d.high : temp;
+      d.pop = pop;
+      d.dayText = p.shortForecast || p.name || "";
+      d.text = d.dayText || d.text;
+    }else{
+      d.low = Number.isNaN(temp) ? d.low : temp;
+      d.nightText = p.shortForecast || p.name || "";
+      if(!d.text) d.text = d.nightText;
+    }
+  }
+
+  // Fill any missing high/low only when the 12-hour forecast does not provide it.
+  for(const p of hourlyPeriods || []){
+    const key = localDateKey(p.startTime);
+    const d = ensure(key);
+    const temp = Number(p.temperature);
+    if(!Number.isNaN(temp)){
+      if(d.high === null) d.high = temp;
+      if(d.low === null) d.low = temp;
+      d.high = Math.max(d.high, temp);
+      d.low = Math.min(d.low, temp);
+    }
+    if(!d.text) d.text = p.shortForecast || "Weather";
+  }
+
+  const days = [];
+  for(let i = 0; i < 5; i++){
+    const key = addDaysToKey(startKey, i);
+    const d = ensure(key);
+    d.text = d.dayText || d.text || d.nightText || "Weather";
+    days.push(d);
+  }
+  return days;
+}
+
+async function loadWeather(){
+  const pointUrl = `${CONFIG.apiBase}/points/${CONFIG.latitude},${CONFIG.longitude}`;
+
+  try{
+    const point = await fetchJson(pointUrl);
+    const props = point.properties || {};
+
+    const [hourly, forecast, observation, alerts] = await Promise.all([
+      fetchJson(props.forecastHourly),
+      fetchJson(props.forecast),
+      loadObservation(props.observationStations),
+      loadAlerts()
+    ]);
+
+    const hourlyPeriods = firstCurrentHourly((hourly.properties && hourly.properties.periods) || []);
+    const forecastPeriods = (forecast.properties && forecast.properties.periods) || [];
+    const days = makeDaily((hourly.properties && hourly.properties.periods) || [], forecastPeriods);
+    const currentHour = hourlyPeriods[0] || {};
+    const currentText = normalizeCondition((observation && observation.text) || currentHour.shortForecast || "Weather");
+    const currentCode = textToCode(currentText);
+    const currentTemp = observation && observation.temperature !== null ? observation.temperature : currentHour.temperature;
+    const currentFeels = observation && observation.feels !== null ? observation.feels : currentTemp;
+    const humidity = observation && observation.humidity !== null && observation.humidity !== undefined ? round(observation.humidity) + "%" : "--";
+    const wind = observation && observation.windText ? observation.windText : (observation && observation.wind !== null && observation.wind !== undefined ? round(observation.wind) + " mph" : safeText(currentHour.windSpeed, "--"));
+    const activeForecastPeriod = forecastPeriods.find(p => new Date(p.endTime).getTime() > Date.now()) || forecastPeriods[0] || currentHour;
+    const rainNow = popValue(activeForecastPeriod);
+
+    const today = days[0] || {};
+    const updatedAt = observation && observation.timestamp ? observation.timestamp : (forecast.properties && forecast.properties.updated) || new Date().toISOString();
+
+    document.getElementById("updated").textContent = "Updated " + formatTime(updatedAt);
+    document.getElementById("temp").textContent = round(currentTemp) + "°";
+    document.getElementById("condition").textContent = currentText;
     document.getElementById("summary").textContent =
-      `Feels ${round(current.apparent_temperature)}° • H ${round(daily.temperature_2m_max[0])}° • L ${round(daily.temperature_2m_min[0])}°`;
-    document.getElementById("currentIcon").innerHTML = iconSVG(current.weather_code, Number(current.is_day) === 1, 42);
-    document.getElementById("rainNow").textContent = round(rains24[0] || 0) + "%";
-    document.getElementById("humidity").textContent = round(current.relative_humidity_2m) + "%";
-    document.getElementById("wind").textContent = round(current.wind_speed_10m) + " mph";
+      `Feels ${round(currentFeels)}° • H ${today.high === null ? "--" : round(today.high) + "°"} • L ${today.low === null ? "--" : round(today.low) + "°"}`;
+    document.getElementById("currentIcon").innerHTML = iconSVG(currentCode, currentHour.isDaytime !== false, 42);
+    document.getElementById("rainNow").textContent = rainNow + "%";
+    document.getElementById("humidity").textContent = humidity;
+    document.getElementById("wind").textContent = wind;
 
-    setBanner(rains24, current.weather_code);
+    const hours24 = hourlyPeriods.map(p => p.startTime);
+    const temps24 = hourlyPeriods.map(p => Number(p.temperature));
+    const rains24 = hourlyPeriods.map(p => cleanPop(p.probabilityOfPrecipitation && p.probabilityOfPrecipitation.value));
+
+    setBanner(rains24, currentText, alerts);
     renderChart(hours24, temps24, rains24);
-    renderDays(
-      daily.time.slice(0, 5),
-      daily.weather_code.slice(0, 5),
-      daily.temperature_2m_max.slice(0, 5),
-      daily.temperature_2m_min.slice(0, 5),
-      daily.precipitation_probability_max.slice(0, 5)
-    );
+    renderDays(days);
 
     document.getElementById("app").classList.remove("loading");
   }catch(e){
-    document.getElementById("condition").textContent = "Weather unavailable";
+    document.getElementById("app").classList.remove("loading");
+    document.getElementById("condition").textContent = "Weather.gov unavailable";
     document.getElementById("summary").textContent = "Will retry automatically";
     document.getElementById("updated").textContent = "Retrying soon";
-    document.getElementById("bannerText").textContent = "Weather data connection issue. Retrying automatically.";
+    document.getElementById("bannerText").textContent = "Weather.gov data connection issue. Retrying automatically.";
     requestAnimationFrame(updateBannerScroll);
   }
 }
